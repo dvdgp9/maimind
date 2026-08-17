@@ -1,0 +1,24 @@
+/vendor/
+/node_modules/
+
+.env
+.env.*
+!.env.example
+
+# Datos de usuario: nunca al repositorio
+/storage/audio/*
+/storage/logs/*
+/storage/tmp/*
+!/storage/audio/.gitkeep
+!/storage/logs/.gitkeep
+!/storage/tmp/.gitkeep
+
+.phpunit.cache/
+.phpunit.result.cache
+/coverage/
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

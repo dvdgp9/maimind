@@ -1,0 +1,57 @@
+# Paridad exacta con producción: MariaDB 11.4 y PHP 8.3.
+#
+# Es OPCIONAL. En local se puede desarrollar contra cualquier MariaDB reciente —
+# `php bin/check` avisa si la versión no coincide con la de producción. Usa esto
+# cuando quieras reproducir producción de verdad: antes de un despliegue, o para
+# perseguir un bug que solo aparece allí.
+#
+#   docker compose up -d db          # solo la base de datos (host: 127.0.0.1:3307)
+#   docker compose up -d             # base de datos + PHP 8.3 en el 8080
+#   docker compose exec app php bin/check
+#
+# El puerto es el 3307 para no chocar con el MariaDB que ya corre en el 3306.
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:-maimind}
+      MARIADB_USER: ${DB_USERNAME:-maimind}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-solo-para-docker-local}
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+00:00
+      --sql-mode=STRICT_ALL_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+    ports:
+      - "3307:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Dentro de la red de compose la base de datos es "db" en el 3306.
+      DB_HOST: db
+      DB_PORT: 3306
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - /app/vendor
+
+volumes:
+  dbdata:

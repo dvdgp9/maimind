@@ -1,0 +1,197 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Comprobación de entorno. Verifica que el esqueleto está sano antes de
+ * seguir construyendo encima.
+ *
+ *   php bin/check
+ */
+
+$app = require dirname(__DIR__) . '/src/bootstrap.php';
+
+use MaiMind\Support\Config;
+use MaiMind\Support\Database;
+use MaiMind\Support\Lang;
+use MaiMind\Support\Ulid;
+
+$failures = [];
+$results  = [];
+
+function check(string $label, bool $ok, string $detail = ''): void
+{
+    global $failures, $results;
+
+    $results[] = sprintf('  %s  %-38s %s', $ok ? 'OK  ' : 'FALLA', $label, $detail);
+
+    if (! $ok) {
+        $failures[] = $label;
+    }
+}
+
+echo "\n" . config('app.name') . " — comprobación de entorno\n\n";
+
+// --- PHP ---------------------------------------------------------------
+$phpOk = PHP_VERSION_ID >= 80300;
+check('PHP >= 8.3', $phpOk, PHP_VERSION);
+
+if (PHP_VERSION_ID >= 80400) {
+    $results[] = '  AVISO  PHP local es 8.4; producción corre 8.3.30';
+}
+
+foreach (['pdo_mysql', 'mbstring', 'json', 'intl', 'curl'] as $ext) {
+    check("extensión {$ext}", extension_loaded($ext));
+}
+
+// --- Autoload y configuración -----------------------------------------
+check('autoload PSR-4', class_exists(Ulid::class));
+check('Config cargada', config('app.name') !== null, (string) config('app.env'));
+check('zona horaria en UTC', date_default_timezone_get() === 'UTC', date_default_timezone_get());
+
+// --- i18n ---------------------------------------------------------------
+check('t() en español', t('app.name') === 'MaiMind', t('capture.greeting'));
+
+Lang::setLocale('en');
+$enOk = t('capture.greeting') === 'How are you?';
+Lang::setLocale((string) config('app.locale', 'es'));
+check('t() en inglés', $enOk);
+
+check(
+    'clave inexistente devuelve la clave',
+    t('no.existe.esta.clave') === 'no.existe.esta.clave',
+);
+
+check(
+    'resolución de locale por Accept-Language',
+    Lang::resolve(null, 'en-GB,en;q=0.9,es;q=0.8', ['es', 'en']) === 'en',
+);
+
+check(
+    'preferencia del usuario gana al navegador',
+    Lang::resolve('es', 'en-GB,en;q=0.9', ['es', 'en']) === 'es',
+);
+
+// --- ULID ---------------------------------------------------------------
+$ulid = Ulid::generate();
+check('ULID de 26 caracteres', strlen($ulid) === 26, $ulid);
+check('ULID válido', Ulid::isValid($ulid));
+check(
+    'marca temporal del ULID',
+    abs(Ulid::timestamp($ulid) - (int) floor(microtime(true) * 1000)) < 5000,
+);
+
+// --- Almacenamiento -----------------------------------------------------
+foreach (['audio', 'logs', 'tmp'] as $dir) {
+    $path = Config::basePath((string) config("app.paths.{$dir}"));
+    check("storage/{$dir} escribible", is_dir($path) && is_writable($path));
+}
+
+check(
+    'storage fuera de public/',
+    ! str_starts_with(
+        Config::basePath((string) config('app.paths.audio')),
+        Config::basePath('public'),
+    ),
+);
+
+// --- Base de datos ------------------------------------------------------
+$pdo = null;
+
+try {
+    $pdo = Database::connection();
+    check('conexión a la base de datos', true, (string) config('database.database'));
+} catch (Throwable $e) {
+    check('conexión a la base de datos', false, $e->getMessage());
+}
+
+if ($pdo !== null) {
+    $version = Database::serverVersionNumber($pdo);
+    $target  = (string) config('database.target_version');
+
+    check('servidor MariaDB', Database::isMariaDb($pdo), Database::serverVersion($pdo));
+
+    $sameMinor = str_starts_with($version, $target . '.');
+
+    if (! $sameMinor) {
+        $results[] = sprintf(
+            '  AVISO  %-38s local %s · producción %s',
+            'versión distinta a producción',
+            $version,
+            $target,
+        );
+    }
+
+    $session = Database::sessionSettings($pdo);
+
+    // El invariante que más caro sale si falla: la sesión DEBE estar en UTC.
+    check('sesión en UTC', ($session['time_zone'] ?? '') === '+00:00', $session['time_zone'] ?? '?');
+
+    check(
+        'modo estricto activo',
+        str_contains($session['sql_mode'] ?? '', 'STRICT_ALL_TABLES'),
+    );
+
+    check('conexión en utf8mb4', ($session['charset'] ?? '') === 'utf8mb4', $session['charset'] ?? '?');
+
+    check(
+        'collation utf8mb4_unicode_ci',
+        ($session['collation'] ?? '') === 'utf8mb4_unicode_ci',
+        $session['collation'] ?? '?',
+    );
+
+    // NOW() debe coincidir con la hora UTC de PHP. Si esto falla, todos los
+    // sellos temporales escritos por el servidor irían en la zona equivocada.
+    $dbNow  = (int) $pdo->query('SELECT UNIX_TIMESTAMP()')?->fetchColumn();
+    check('reloj de la BD alineado con UTC', abs($dbNow - time()) <= 2, gmdate('H:i:s', $dbNow) . ' UTC');
+
+    check('consultas preparadas nativas', $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES) === false);
+
+    // Con prepares nativas, una columna entera vuelve como int y no como cadena.
+    // (Un placeholder suelto `SELECT ?` no sirve para comprobarlo: PDO lo envía
+    // como cadena y el servidor devuelve una cadena, con razón.)
+    $pdo->exec('CREATE TEMPORARY TABLE t_check (n INT)');
+    $pdo->exec('INSERT INTO t_check (n) VALUES (42)');
+    check('los enteros vuelven como enteros', $pdo->query('SELECT n FROM t_check')?->fetchColumn() === 42);
+
+    $stmt = $pdo->query("SELECT 'ñandú €' AS s");
+    check('utf8mb4 de ida y vuelta', $stmt?->fetchColumn() === 'ñandú €');
+}
+
+// --- Logger -------------------------------------------------------------
+$app['logger']->info('bin/check ejecutado', ['env' => config('app.env')]);
+$logFile = Config::basePath((string) config('app.paths.logs')) . '/app-' . gmdate('Y-m-d') . '.log';
+check('logger escribe a fichero', is_file($logFile));
+
+// --- Configuración pendiente -------------------------------------------
+$warnings = [];
+
+if ((string) config('services.openrouter.api_key') === '') {
+    $warnings[] = 'OPENROUTER_API_KEY vacía (hace falta en la fase 2)';
+}
+
+if ((string) config('app.key') === '') {
+    $warnings[] = 'APP_KEY vacía (hace falta en la tarea 0.6)';
+}
+
+if ((string) config('services.openrouter.extraction.model') === '') {
+    $warnings[] = 'OPENROUTER_EXTRACTION_MODEL sin fijar (hace falta en la fase 3)';
+}
+
+echo implode("\n", $results) . "\n";
+
+if ($warnings !== []) {
+    echo "\nPendiente de configurar:\n";
+    foreach ($warnings as $warning) {
+        echo "  · {$warning}\n";
+    }
+}
+
+if ($failures !== []) {
+    echo "\n" . count($failures) . " comprobación(es) fallidas.\n\n";
+    exit(1);
+}
+
+echo "\nTodo correcto.\n\n";
+exit(0);

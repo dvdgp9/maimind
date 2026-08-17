@@ -1,0 +1,14 @@
+.git/
+.env
+.env.*
+!.env.example
+vendor/
+node_modules/
+storage/audio/*
+storage/logs/*
+storage/tmp/*
+.phpunit.cache/
+.phpunit.result.cache
+coverage/
+docs/
+.DS_Store

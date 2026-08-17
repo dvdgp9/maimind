@@ -1,0 +1,45 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Genera APP_KEY y la escribe en .env.
+ *
+ *   php bin/key            genera solo si está vacía
+ *   php bin/key --force    la regenera (invalida todos los testigos CSRF activos)
+ */
+
+require dirname(__DIR__) . '/src/bootstrap.php';
+
+use MaiMind\Support\Config;
+
+$force = in_array('--force', array_slice($argv, 1), true);
+$env   = Config::basePath('.env');
+
+if (! is_file($env)) {
+    fwrite(STDERR, "No existe .env. Copia .env.example primero.\n");
+    exit(1);
+}
+
+$actual = (string) config('app.key');
+
+if ($actual !== '' && ! $force) {
+    echo "APP_KEY ya está definida. Usa --force para regenerarla.\n";
+    exit(0);
+}
+
+$key      = base64_encode(random_bytes(32));
+$contents = (string) file_get_contents($env);
+
+$contents = preg_match('/^APP_KEY=.*$/m', $contents) === 1
+    ? (string) preg_replace('/^APP_KEY=.*$/m', 'APP_KEY=' . $key, $contents)
+    : rtrim($contents) . "\nAPP_KEY=" . $key . "\n";
+
+file_put_contents($env, $contents);
+
+echo $force
+    ? "APP_KEY regenerada. Los formularios abiertos van a fallar una vez.\n"
+    : "APP_KEY generada.\n";
+
+exit(0);

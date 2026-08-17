@@ -1,0 +1,123 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Runner de migraciones.
+ *
+ *   php bin/migrate                    aplica las pendientes
+ *   php bin/migrate status             qué hay aplicado y qué falta
+ *   php bin/migrate --pretend          enseña qué haría, sin tocar nada
+ *   php bin/migrate --create-database  crea la base de datos si no existe
+ */
+
+$app = require dirname(__DIR__) . '/src/bootstrap.php';
+
+use MaiMind\Support\Config;
+use MaiMind\Support\Database;
+use MaiMind\Support\Migrator;
+
+$args    = array_slice($argv, 1);
+$command = 'migrate';
+$pretend = false;
+$create  = false;
+
+foreach ($args as $arg) {
+    match ($arg) {
+        'status'                => $command = 'status',
+        'migrate', 'up'         => $command = 'migrate',
+        '--pretend', '--dry-run' => $pretend = true,
+        '--create-database'     => $create = true,
+        default                 => throw new InvalidArgumentException("Opción desconocida: {$arg}"),
+    };
+}
+
+$logger = $app['logger'];
+
+try {
+    if ($create) {
+        $config = (array) config('database');
+
+        $pdo = Database::connectWithoutDatabase();
+
+        $pdo->exec(sprintf(
+            'CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET %s COLLATE %s',
+            str_replace('`', '', (string) $config['database']),
+            (string) $config['charset'],
+            (string) $config['collation'],
+        ));
+
+        echo "Base de datos `{$config['database']}` lista.\n";
+    }
+
+    $pdo      = Database::connection();
+    $migrator = new Migrator($pdo, Config::basePath('migrations'));
+
+    $migrator->ensureRegistry();
+
+    // Avisos antes de nada: son problemas de integridad del propio historial.
+    foreach ($migrator->drift() as $version) {
+        fwrite(STDERR, "AVISO  {$version} ya se aplicó pero su fichero ha cambiado desde entonces.\n");
+        fwrite(STDERR, "       No se va a reaplicar. Si el cambio importa, escribe una migración nueva.\n");
+    }
+
+    foreach ($migrator->missing() as $version) {
+        fwrite(STDERR, "AVISO  {$version} está registrada pero su fichero ya no existe.\n");
+    }
+
+    if ($command === 'status') {
+        $applied = $migrator->applied();
+        $pending = $migrator->pending();
+
+        echo "\nMigraciones\n\n";
+
+        foreach ($migrator->available() as $version => $migration) {
+            $mark = isset($applied[$version]) ? 'aplicada  ' : 'PENDIENTE ';
+            $when = $applied[$version]['applied_at'] ?? '';
+            printf("  %s %-46s %s\n", $mark, $version, $when);
+        }
+
+        if ($migrator->available() === []) {
+            echo "  (no hay ficheros en migrations/)\n";
+        }
+
+        printf("\n%d aplicadas · %d pendientes\n\n", count($applied), count($pending));
+
+        exit(0);
+    }
+
+    $results = $migrator->migrate($pretend);
+
+    if ($results === []) {
+        echo "Nada que aplicar. La base de datos está al día.\n";
+        exit(0);
+    }
+
+    echo $pretend ? "\nSe aplicarían:\n\n" : "\nAplicadas:\n\n";
+
+    foreach ($results as $result) {
+        printf(
+            "  %-46s %2d sentencias%s\n",
+            $result['version'],
+            $result['statements'],
+            $pretend ? '' : sprintf('  %d ms', $result['ms']),
+        );
+    }
+
+    echo "\n";
+
+    if (! $pretend) {
+        $logger->info('Migraciones aplicadas', [
+            'versions' => array_column($results, 'version'),
+        ]);
+    }
+
+    exit(0);
+} catch (Throwable $e) {
+    fwrite(STDERR, "\n" . $e->getMessage() . "\n\n");
+
+    $logger->error('Fallo al migrar', ['error' => $e->getMessage()]);
+
+    exit(1);
+}

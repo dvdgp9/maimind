@@ -1,0 +1,371 @@
+/*
+ * MaiMind — hoja de estilos única.
+ * Regla del proyecto: nada de CSS en línea. Todo vive aquí.
+ *
+ * Paleta y reglas de tono: docs/design/06-diseno-y-tono.md
+ */
+
+:root {
+    /* --- Paleta ------------------------------------------------------- */
+    --ground:   #FAF3EA;  /* fondo. Almond Hearth aclarado                */
+    --surface:  #EED3BA;  /* Almond Hearth: tarjetas, no fondo            */
+    --raised:   #FFFDFA;  /* tercera capa, cuando hace falta separar más  */
+    --line:     #E8DACB;
+    --ink:      #151311;  /* Obsidian Ink                                 */
+    --ink-soft: #64534A;
+    --accent:   #4B262F;  /* Velvet Curfew: lo que se toca                */
+    --on-accent:#FAF3EA;
+
+    /* No existe un color de "malo" ni de "bueno". Es deliberado: si algo
+       te sienta bien o mal es lo que la app tiene que descubrir, no lo que
+       debe presuponer. Ver docs/design/05-catalogo-core.md §6.            */
+
+    --radius:   14px;
+    --radius-s: 10px;
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ground:   #151311;
+        --surface:  #211B18;
+        --raised:   #2A2320;
+        --line:     #332B27;
+        --ink:      #EFE2D4;
+        --ink-soft: #A08D80;
+        /* El burdeos original es invisible sobre obsidiana: se levanta. */
+        --accent:   #B06B77;
+        --on-accent:#151311;
+    }
+}
+
+* { box-sizing: border-box; }
+
+/* El atributo `hidden` tiene que ganar SIEMPRE. Cualquier regla que fije
+   `display` (y aquí hay varias con flex y grid) tiene más especificidad que
+   el `display: none` que el navegador aplica por defecto a [hidden], y el
+   elemento se queda visible sin que nadie se entere. */
+[hidden] { display: none !important; }
+
+body {
+    margin: 0;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+    width: min(30rem, 92vw);
+    padding: 2rem 1.5rem;
+    text-align: center;
+}
+
+h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.6rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+}
+
+.tagline { margin: 0 0 1.5rem; color: var(--ink-soft); }
+
+.muted { margin: 0; font-size: 0.8125rem; color: var(--ink-soft); }
+
+a { color: var(--accent); }
+
+/* ---------------------------------------------------------------- iconos */
+
+svg { display: inline-block; vertical-align: -0.125em; flex: none; }
+
+/* ---------------------------------------------------------------- barra */
+
+.bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.7rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--ground);
+    position: fixed;
+    inset: 0 0 auto 0;
+}
+
+.bar__brand { font-weight: 600; letter-spacing: -0.01em; }
+.bar__spacer { flex: 1; }
+.bar__user { color: var(--ink-soft); font-size: 0.875rem; }
+.bar__form { margin: 0; }
+
+body:has(.bar) { align-items: start; padding-top: 4.5rem; }
+
+/* --------------------------------------------------------- formularios */
+
+.form { display: grid; gap: 1rem; margin: 1.5rem 0 1rem; text-align: left; }
+
+.field { display: grid; gap: 0.35rem; }
+
+.field > span {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+}
+
+.field input {
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    font: inherit;
+    color: var(--ink);
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+}
+
+.field input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+}
+
+.field--error input { border-color: var(--accent); border-width: 2px; }
+
+.hint { color: var(--ink-soft); font-size: 0.75rem; }
+
+/* ------------------------------------------------------------- botones */
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.7rem 1.1rem;
+    font: inherit;
+    font-weight: 600;
+    color: var(--on-accent);
+    background: var(--accent);
+    border: 0;
+    border-radius: var(--radius-s);
+    cursor: pointer;
+}
+
+.button:hover { filter: brightness(1.1); }
+.button:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+
+.button--quiet {
+    color: var(--ink-soft);
+    background: transparent;
+    border: 1px solid var(--line);
+    font-weight: 500;
+}
+
+/* El botón de grabar es la única acción de su pantalla: círculo, sin texto. */
+.record {
+    display: grid;
+    place-items: center;
+    width: 6rem;
+    height: 6rem;
+    margin: 1.75rem auto 0;
+    color: var(--on-accent);
+    background: var(--accent);
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.record:disabled { opacity: 0.4; cursor: not-allowed; }
+.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+.link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0;
+    font: inherit;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.link:hover { color: var(--ink); }
+
+/* -------------------------------------------------------------- avisos */
+
+.alert {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+    margin: 0 0 1rem;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.875rem;
+    text-align: left;
+    color: var(--ink);
+    background: var(--surface);
+    border-radius: var(--radius-s);
+    white-space: pre-wrap;
+}
+
+/* -------------------------------------------------------------- tarjetas */
+
+.panel {
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--line);
+    text-align: left;
+}
+
+.panel h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+}
+
+.card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 0.85rem 0.95rem;
+}
+
+.list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.5rem; }
+
+.list li {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.875rem;
+    background: var(--surface);
+    border-radius: var(--radius-s);
+}
+
+.list li .muted { margin-left: auto; }
+.list code { font-size: 0.7rem; opacity: 0.65; }
+
+/* --------------------------------------------------- estado sin datos */
+
+/* "Aún no hay datos suficientes" es un estado de primera clase, no una
+   gráfica vacía con aspecto de conclusión. */
+.empty {
+    display: grid;
+    gap: 0.4rem;
+    justify-items: center;
+    padding: 1.75rem 1rem;
+    color: var(--ink-soft);
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    text-align: center;
+    font-size: 0.875rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .button, .record, .link { transition: filter 120ms ease, color 120ms ease; }
+}
+
+/* ---------------------------------------------------------------- captura */
+
+.date {
+    margin: 0 0 0.35rem;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+}
+
+.date::first-letter { text-transform: uppercase; }
+
+.capture { display: grid; justify-items: center; }
+
+/* El toque de 1 a 5. Opcional, y tiene que verse que lo es: sin borde de
+   campo obligatorio, con la nota debajo y sin nada preseleccionado. */
+.mood {
+    display: flex;
+    gap: 0.65rem;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.mood__legend {
+    width: 100%;
+    padding: 0;
+    margin-bottom: 0.6rem;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+}
+
+.mood__dot {
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    background: transparent;
+    border: 1.5px solid var(--line);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.mood__dot[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.mood__dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.mood__note {
+    width: 100%;
+    margin: 0.55rem 0 0;
+    font-size: 0.6875rem;
+    color: var(--ink-soft);
+}
+
+/* El botón de grabar: 96px, muy por encima del mínimo táctil de 44px. */
+.record { position: relative; }
+
+.capture[data-state="recording"] .record { animation: latido 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+    .capture[data-state="recording"] .record { animation: none; }
+}
+
+@keyframes latido {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.04); }
+}
+
+.capture__status {
+    min-height: 1.4rem;
+    margin: 0.85rem 0 0;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+}
+
+.capture[data-state="error"] .capture__status { color: var(--ink); font-weight: 500; }
+
+.capture__cancel { margin-top: 0.35rem; }
+
+.card--row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.875rem;
+}
+
+.card--row .muted { margin-left: auto; }
+
+/* ------------------------------------------------- pantallas más anchas */
+
+/* Mobile-first: esto solo ensancha, nunca reordena. */
+@media (min-width: 48rem) {
+    .shell { width: min(36rem, 90vw); }
+    .record { width: 7rem; height: 7rem; }
+}

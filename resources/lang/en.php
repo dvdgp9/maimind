@@ -1,0 +1,109 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * English UI strings.
+ *
+ * Placeholder: the product ships in Spanish first. This file exists so the
+ * scaffolding is exercised in both locales from day one — retrofitting i18n is
+ * what costs, not having it.
+ *
+ * Note: this is UI text only, and UI text does translate cleanly. The core
+ * variable catalogue does NOT — see docs/design/04-arquitectura.md §4.bis. When
+ * English becomes real, its catalogue gets designed, not translated.
+ */
+return [
+    'app' => [
+        'name'    => 'MaiMind',
+        'tagline' => 'Observe your life. Let the patterns show up on their own.',
+    ],
+
+    'capture' => [
+        'greeting'       => 'How are you?',
+        'record'         => 'Record',
+        'stop'           => 'Stop',
+        'saving'         => 'Saving…',
+        'saved'          => 'Saved',
+        'mood_hint'      => 'How are you doing right now?',
+        'mood_skip'      => 'Rather not say',
+        'last_entry'     => 'Last entry',
+        'offline_queued' => 'Offline. It will be sent once you are back.',
+        'recording'     => 'Recording',
+        'cancel'        => 'Discard',
+        'no_entries'    => 'You have not recorded anything yet',
+        'retry'         => 'Retry',
+        'today'         => 'today',
+        'yesterday'     => 'yesterday',
+    ],
+
+    'review' => [
+        'title'             => 'Here is what I understood',
+        'confirm'           => 'Yes, that is right',
+        'edit'              => 'Fix it',
+        'reject'            => 'No, not that',
+        'skip'              => 'Not now',
+        'pending'           => '{count} things to review',
+        'revision_question' => 'Were you wrong, or do you see it differently now?',
+        'was_wrong'         => 'I was wrong',
+        'see_differently'   => 'I see it differently now',
+        'new_variable'      => 'Track ":name"? You have mentioned it :count times',
+        'track_it'          => 'Track it',
+        'ignore_it'         => 'Ignore',
+    ],
+
+    'evidence' => [
+        'said_by_you'    => 'You said this',
+        'inferred'       => 'Inferred, may be wrong',
+        'confirmed'      => 'Confirmed by you',
+        'as_experienced' => 'How you lived it',
+        'as_understood'  => 'How you see it now',
+    ],
+
+    'analysis' => [
+        'associated_with' => 'appears associated with',
+        'precedes'        => 'often precedes',
+        'compatible_with' => 'the data are compatible with',
+        'your_claim'      => 'what you tell',
+        'observed'        => 'what the data show',
+        'insufficient'    => 'Not enough data yet',
+        'need_more'       => ':count more days needed to look at this',
+        'no_data_gap'     => 'No entries',
+        'baseline'        => 'your usual baseline',
+    ],
+
+
+    'auth' => [
+        'sign_in'      => 'Sign in',
+        'sign_up'      => 'Create account',
+        'sign_out'     => 'Sign out',
+        'email'        => 'Email',
+        'password'     => 'Password',
+        'display_name' => 'What should I call you',
+        'min_chars'    => 'At least 10 characters',
+        'no_account'   => 'No account yet?',
+        'have_account' => 'Already have an account?',
+
+        'invalid_credentials' => 'That email or password is not right',
+        'invalid_email'       => 'That email does not look valid',
+        'password_too_short'  => 'The password needs at least 10 characters',
+        'password_is_email'   => 'The password cannot be your own email',
+        'email_taken'         => 'There is already an account with that email',
+        'account_inactive'    => 'This account is not active',
+        'too_many_attempts'   => 'Too many attempts. Try again in :minutes minutes',
+    ],
+
+    'errors' => [
+        'generic'        => 'Something went wrong. Try again.',
+        'csrf'           => 'The form expired. Please try again.',
+        'not_found'      => 'Not found',
+        'unauthorized'   => 'You need to sign in',
+        'audio_too_big'  => 'That recording is too long',
+        'audio_bad_type' => 'That audio format is not supported',
+        'audio_missing'  => 'The recording did not arrive',
+        'audio_empty'    => 'The recording came out empty',
+        'mic_denied'     => 'I need permission to use the microphone',
+        'mic_missing'    => 'I cannot find a microphone',
+        'insecure'       => 'Recording needs a secure connection (https)',
+    ],
+];

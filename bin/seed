@@ -1,0 +1,65 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Siembra el catálogo universal de variables y dominios vitales.
+ *
+ *   php bin/seed             aplica los cambios
+ *   php bin/seed --pretend   enseña qué cambiaría, sin tocar nada
+ *
+ * Es idempotente: ejecutarlo dos veces no cambia nada la segunda. Se puede
+ * volver a ejecutar cada vez que se afine el catálogo, en local y en producción.
+ */
+
+$app = require dirname(__DIR__) . '/src/bootstrap.php';
+
+use MaiMind\Domain\CatalogSeeder;
+use MaiMind\Support\Config;
+use MaiMind\Support\Database;
+
+$pretend = in_array('--pretend', array_slice($argv, 1), true)
+        || in_array('--dry-run', array_slice($argv, 1), true);
+
+try {
+    $variables = require Config::basePath('resources/seeds/variables_core.php');
+    $tags      = require Config::basePath('resources/seeds/tags_core.php');
+
+    $seeder = new CatalogSeeder(Database::connection());
+
+    $resumen = $seeder->seed($variables, $tags, $pretend);
+
+    echo "\n" . ($pretend ? 'Cambiaría:' : 'Catálogo sembrado:') . "\n\n";
+
+    printf(
+        "  Variables   %d creadas · %d actualizadas · %d sin cambios\n",
+        $resumen['variables']['creadas'],
+        $resumen['variables']['actualizadas'],
+        $resumen['variables']['sin_cambios'],
+    );
+
+    printf(
+        "  Dominios    %d creados · %d actualizados · %d sin cambios\n",
+        $resumen['tags']['creados'],
+        $resumen['tags']['actualizados'],
+        $resumen['tags']['sin_cambios'],
+    );
+
+    if (! $pretend) {
+        printf("  Alias       %d\n", $resumen['alias']);
+    }
+
+    echo "\n";
+
+    if (! $pretend) {
+        $app['logger']->info('Catálogo core sembrado', $resumen);
+    }
+
+    exit(0);
+} catch (Throwable $e) {
+    fwrite(STDERR, "\n" . $e->getMessage() . "\n\n");
+    $app['logger']->error('Fallo al sembrar el catálogo', ['error' => $e->getMessage()]);
+
+    exit(1);
+}
