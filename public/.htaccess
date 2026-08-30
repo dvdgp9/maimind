@@ -1,0 +1,21 @@
+# Enrutado del front controller para Apache.
+#
+# En desarrollo se usa `php -S ... public/index.php`, que enruta por el script
+# y hace innecesario este fichero. En producción manda Apache, así que sin esto
+# cualquier ruta que no sea un fichero real devuelve 404.
+
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Los ficheros y directorios que existen se sirven tal cual (assets).
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Los ficheros ocultos no se sirven nunca.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
