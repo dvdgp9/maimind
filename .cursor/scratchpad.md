@@ -783,14 +783,46 @@ ni frases a medias. Que un modelo respete las vacilaciones de una persona real
 —que es lo que exige el anclaje de evidencia— hay que comprobarlo con habla de
 verdad.
 
-**Pendiente propuesto**: detectar huecos de cobertura comparando los tramos con
-la duración del audio, y marcar la entrada. No recupera lo perdido, pero deja de
-ser invisible. Ningún modelo está a salvo de esto.
+**Detección de huecos implementada** (migración `006`). Ver la entrada siguiente.
 
 ⚠️ **Seguridad, corregido lo que dije antes.** `codex` **sigue teniendo**
 `(root) NOPASSWD: ALL`. Una prueba con `sudo -u dvdgp` falló pidiendo
 contraseña y me llevó a decir que el problema estaba resuelto; no lo está:
 hacerse pasar por otro usuario pide contraseña, pasar a root no.
+
+**2026-08-30 — Executor. Detección de pérdida de contenido.**
+
+Migración `006`: `transcripts.gap_total_ms` (la columna que se consulta) y
+`coverage_gaps` (dónde, como JSON opaco). Se calculan comparando los tramos con
+la duración del audio.
+
+- **NULL significa «no se sabe», no «no hay huecos».** Es lo que pasa cuando el
+  proveedor no devuelve tramos. Decir que no hay pérdida cuando no se ha podido
+  mirar sería justo la clase de mentira que este sistema no puede permitirse, y
+  por eso `withCoverageGaps()` filtra por `> 0` y no por `!= 0`.
+- **Tolerancia de 1,5 s.** Las pausas entre frases rondan los 300-800 ms y el
+  caso real medido fue de 4600 ms: hay sitio de sobra para no llenar el sistema
+  de avisos que no significan nada.
+- Un hueco **no** hace fallar el trabajo: la transcripción sirve igual. Se
+  guarda y se registra un aviso.
+
+Verificado en producción con el mismo audio de 40 s y el mismo código, contra
+los dos modelos:
+
+| Modelo | Tramos | `gap_total_ms` | Frase del parque |
+|---|---|---|---|
+| whisper-large-v3-turbo | 2 | **4560** (25,44–30,00 s) | FALTA |
+| whisper-1 | 9 | 0 | PRESENTE |
+
+**El detector correlaciona exactamente con la pérdida real**, y no da falsos
+positivos sobre una transcripción buena de 9 tramos. Datos de prueba borrados
+después.
+
+**284 tests de PHP (1582 aserciones) y 11 de JavaScript, en verde.**
+
+Queda por comprobar con **habla real** —con muletillas y frases a medias— qué
+modelo respeta mejor las vacilaciones. La voz sintética no sirve para eso. Se
+hará cuando haya grabaciones de verdad.
 
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue
