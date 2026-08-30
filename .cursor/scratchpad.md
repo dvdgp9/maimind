@@ -424,6 +424,21 @@ iaiaPRO en producción. Comunicado al usuario el 2026-08-16.
 
 ---
 
+## Despliegue
+
+**https://maimind.iaiapro.com** — montado el 2026-08-30, funcionando en el servidor.
+Detalle y trampas en `docs/despliegue.md`.
+
+- Dominio Hestia, base `dvdgp_maimind`, docroot en `public_html/public`, `storage/` fuera.
+- Migraciones y catálogo aplicados en producción. `bin/check` en verde.
+- `bin/deploy` deja el despliegue en un comando.
+
+**Bloqueado por el usuario:** el DNS de `iaiapro.com` lo llevan los nameservers de
+LucusHost, no este servidor. Hace falta un registro `A` de `maimind.iaiapro.com` a
+`91.98.155.109` antes de poder emitir el certificado y acceder desde fuera.
+
+Pendiente tras el DNS: `v-add-letsencrypt-domain`, y cron de purga de audio (necesita 1.2).
+
 ## Convenciones acordadas
 
 - **El usuario no verifica a mano.** Ejecutar las pruebas y los scripts de comprobación,
