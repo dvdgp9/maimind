@@ -214,6 +214,14 @@ if ($pdo !== null) {
     }
 }
 
+// --- Transcripción ------------------------------------------------------
+try {
+    $transcriptor = MaiMind\Pipeline\Transcription\TranscriptionProviders::fromConfig();
+    check('transcriptor configurado', true, $transcriptor->name());
+} catch (Throwable $e) {
+    check('transcriptor configurado', false, $e->getMessage());
+}
+
 // --- Política de datos (D10) -------------------------------------------
 // Comprobación y no aviso: mandar la voz de alguien contando cómo está a un
 // proveedor que entrena con ella no se arregla luego.
@@ -232,7 +240,9 @@ check('logger escribe a fichero', is_file($logFile));
 // --- Configuración pendiente -------------------------------------------
 
 if ((string) config('services.openrouter.api_key') === '') {
-    $warnings[] = 'OPENROUTER_API_KEY vacía (hace falta en la fase 2)';
+    $warnings[] = (string) config('services.transcription.driver') === 'openrouter'
+        ? 'OPENROUTER_API_KEY vacía: no se puede transcribir (o usa TRANSCRIPTION_DRIVER=fake)'
+        : 'OPENROUTER_API_KEY vacía';
 }
 
 if ((string) config('app.key') === '') {

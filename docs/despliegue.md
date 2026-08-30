@@ -156,6 +156,25 @@ otras APIs y restringir el enrutado a nivel de cuenta podría afectarlas.
 Las dos se combinan con un OR y solo pueden restringir más, así que activarlo en
 la cuenta no puede romper nada. Detalle en `docs/api/openrouter.md` §4.
 
+## Transcripción: lo que hay que poner en el `.env` de producción
+
+```
+OPENROUTER_API_KEY=sk-or-...
+TRANSCRIPTION_DRIVER=openrouter
+OPENROUTER_TRANSCRIPTION_MODEL=openai/whisper-large-v3-turbo
+```
+
+Sin la clave, `bin/check` avisa y los trabajos `transcribe` mueren en el primer
+intento con «Falta OPENROUTER_API_KEY» — a propósito: reintentarlo cinco veces
+no hace aparecer una clave.
+
+Para desarrollar sin gastar, `TRANSCRIPTION_DRIVER=fake` transcribe con un texto
+de mentira. Las filas que deja llevan `provider = 'fake'` y coste 0, así que no
+se pueden confundir con las de verdad al sumar gastos.
+
+**El worker hay que reiniciarlo** al cambiar cualquiera de estas variables: lleva
+el proveedor construido en memoria. `bin/deploy` ya lo hace.
+
 ## Pendiente
 
-- Nada del despliegue. Lo siguiente es la fase 2 (transcripción).
+- Nada del despliegue. Lo siguiente es la fase 3 (extracción).

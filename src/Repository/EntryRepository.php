@@ -172,6 +172,34 @@ final class EntryRepository extends UserScopedRepository
         return $stmt->rowCount() === 1;
     }
 
+    /**
+     * Una entrada con lo que hace falta para transcribirla.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function forTranscription(string $uid): ?array
+    {
+        return $this->findOneWhere(
+            ['uid' => $uid],
+            'id, uid, audio_path, audio_mime, audio_bytes, audio_sha256, '
+            . 'audio_duration_ms, audio_state, pipeline_state',
+        );
+    }
+
+    /**
+     * Mueve el estado del pipeline.
+     *
+     * `error_message` se limpia al avanzar: si no, una entrada que falló y
+     * luego se procesó bien seguiría enseñando el error de la vez anterior.
+     */
+    public function moveToState(string $uid, string $estado, ?string $error = null): bool
+    {
+        return $this->update(
+            ['pipeline_state' => $estado, 'error_message' => $error],
+            ['uid' => $uid],
+        ) === 1;
+    }
+
     /** @return array<string,mixed>|null */
     public function latest(): ?array
     {

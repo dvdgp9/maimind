@@ -90,10 +90,14 @@ Descubrir los slugs disponibles en tiempo de implementación:
 GET https://openrouter.ai/api/v1/models?output_modalities=transcription
 ```
 
+**Slugs verificados el 2026-08-30** (19 modelos de transcripción disponibles). Los que
+importan aquí: `openai/whisper-large-v3-turbo`, `openai/whisper-large-v3`, `openai/whisper-1`.
+
 Los modelos tipo Whisper se facturan **por duración**; los más nuevos, **por token**.
 Preferencia para MaiMind, en orden:
 
-1. **Whisper large-v3-turbo** — verbatim, 99+ idiomas, barato y rápido.
+1. **`openai/whisper-large-v3-turbo`** — verbatim, 99+ idiomas, barato y rápido.
+   **Es el que está configurado por defecto.**
 2. **whisper-1** — más lento, referencia conocida.
 3. Evitar los STT basados en LLM que "limpian" el habla: en este producto las muletillas,
    vacilaciones y frases a medias **son señal**, y el anclaje de evidencia depende de que

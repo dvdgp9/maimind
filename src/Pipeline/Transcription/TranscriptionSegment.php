@@ -33,6 +33,15 @@ final class TranscriptionSegment
         public readonly ?float $confidence = null,
         public readonly ?int $charStart = null,
         public readonly ?int $charEnd = null,
+        /**
+         * Lo que el proveedor dio en crudo y no cabe en `confidence`:
+         * `avg_logprob`, `no_speech_prob`… Se guarda tal cual, sin
+         * interpretar, porque `confidence` es una transformación con pérdida y
+         * algún día puede hacer falta el número de verdad.
+         *
+         * @var array<string,float>|null
+         */
+        public readonly ?array $providerMetrics = null,
     ) {
         if ($startMs < 0 || $endMs < $startMs) {
             throw new InvalidArgumentException(
@@ -55,6 +64,7 @@ final class TranscriptionSegment
             $this->confidence,
             $start,
             $end,
+            $this->providerMetrics,
         );
     }
 
@@ -69,6 +79,7 @@ final class TranscriptionSegment
             'confidence' => $this->confidence,
             'char_start' => $this->charStart,
             'char_end'   => $this->charEnd,
+            'raw'        => $this->providerMetrics,
         ];
     }
 
@@ -83,6 +94,9 @@ final class TranscriptionSegment
             confidence: isset($fila['confidence']) ? (float) $fila['confidence'] : null,
             charStart: isset($fila['char_start']) ? (int) $fila['char_start'] : null,
             charEnd: isset($fila['char_end']) ? (int) $fila['char_end'] : null,
+            providerMetrics: isset($fila['raw']) && is_array($fila['raw'])
+                ? array_map(floatval(...), $fila['raw'])
+                : null,
         );
     }
 }

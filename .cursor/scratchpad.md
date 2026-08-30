@@ -195,7 +195,8 @@ profesionales. Se detallarán al llegar: diseñarlas ahora sin datos reales es a
 - [x] 1.5 PWA instalable — **FASE 1 COMPLETA**
 - [x] D10 Política de datos de OpenRouter — *ajuste de cuenta aplazado a propósito*
 - [x] 2.1 Interfaz TranscriptionProvider + implementación falsa
-- [ ] 2.2 Implementación OpenRouter + job transcribe + coste real
+- [x] 2.2 Implementación OpenRouter + job transcribe + coste real
+- [ ] 2.3 Vista de la transcripción y edición manual
 
 ---
 
@@ -662,6 +663,62 @@ media parte de lo que puede salir mal en la fase 2 es mandar el audio
 equivocado, no interpretar mal la respuesta.
 
 **239 tests de PHP (1453 aserciones) y 11 de JavaScript, en verde.**
+
+**2026-08-30 — Executor, tarea 2.2 terminada.**
+
+`OpenRouterTranscriptionProvider`, `TranscribeHandler`, `TranscriptRepository` y
+un cliente HTTP mínimo (`HttpClient` + curl + falso) para poder probar el
+proveedor sin red: un test que dependa de que OpenRouter esté levantado y que
+cueste dinero cada vez que se ejecuta no es un test.
+
+**Los trabajos `transcribe` que llevaban encolándose desde la 1.2 ya tienen
+quien los atienda.** Verificado de punta a punta con el worker de verdad: el
+trabajo se ejecutó, la transcripción se guardó, la entrada pasó a
+`transcribed`, y el `extract` que encola al terminar quedó **aparcado sin
+gastar intentos** porque la fase 3 no existe todavía — el mecanismo de la 1.3
+funcionando tal como se diseñó.
+
+Decisiones que no son de forma:
+
+- **La confianza de Whisper no existe.** Da `avg_logprob`, la media de los
+  logaritmos de probabilidad de los tokens. `exp()` lo devuelve a 0..1 y cabe en
+  la columna, **pero no es una probabilidad calibrada**: sirve para ordenar qué
+  tramos conviene mirar antes, no para decir «esto es correcto al 87 %».
+  Presentarlo como lo segundo sería la precisión inventada del problema 4. Por
+  debajo de -1 la propia documentación de Whisper dice que los logprobs han
+  fallado, así que ahí no se devuelve nada. El número crudo se guarda aparte en
+  el JSON de segmentos, junto con `no_speech_prob`, por si algún día hace falta
+  de verdad.
+- **El sha256 se comprueba antes de pagar la inferencia.** Si el fichero del
+  disco no es el que se grabó, transcribirlo no sirve de nada y encima cuesta.
+- **Un fallo temporal devuelve la entrada a `captured`, no la deja en
+  `transcribing`.** Dejarla ahí haría creer que hay un worker trabajando en ella
+  cuando no lo hay.
+- **`error_message` se limpia al avanzar**, o una entrada que falló y luego se
+  procesó bien seguiría enseñando el error de la vez anterior.
+- El manejador es idempotente: si ya hay transcripción vigente, no se vuelve a
+  pagar. El trabajo puede repetirse si el worker murió tras guardar y antes de
+  marcarlo hecho.
+
+**Un test comprueba que la política de datos de D10 viaja de verdad en el
+cuerpo de la petición.** Que exista la clase `DataPolicy` no sirve de nada si el
+proveedor no la usa; ese test es lo que hace real la decisión.
+
+Modelo por defecto: **`openai/whisper-large-v3-turbo`**, slug verificado contra
+`/models` el 2026-08-30 (19 modelos de transcripción disponibles). Es la primera
+preferencia del documento. Los STT basados en LLM quedan descartados: «limpian»
+el habla, y aquí las muletillas y las frases a medias son señal.
+
+`TRANSCRIPTION_DRIVER=fake` permite levantar el sistema entero sin clave y sin
+gastar; esas filas llevan `provider = 'fake'` y coste 0, así que no se confunden
+con las reales al sumar.
+
+**272 tests de PHP (1550 aserciones) y 11 de JavaScript, en verde.**
+
+⚠️ **Falta poner `OPENROUTER_API_KEY` en el `.env` de producción.** Hasta
+entonces los trabajos `transcribe` mueren al primer intento con «Falta
+OPENROUTER_API_KEY» —permanente a propósito, reintentar no hace aparecer una
+clave— y las grabaciones se quedan sin transcribir, pero no se pierden.
 
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue

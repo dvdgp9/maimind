@@ -19,6 +19,8 @@ declare(strict_types=1);
 $app = require dirname(__DIR__) . '/src/bootstrap.php';
 
 use MaiMind\Domain\Jobs\Handlers\PurgeAudioHandler;
+use MaiMind\Domain\Jobs\Handlers\TranscribeHandler;
+use MaiMind\Pipeline\Transcription\TranscriptionProviders;
 use MaiMind\Domain\Jobs\JobQueue;
 use MaiMind\Domain\Jobs\Worker;
 use MaiMind\Support\Database;
@@ -53,10 +55,13 @@ try {
     // bloqueada una fila cuando algo se queda colgado a las tres de la mañana.
     $id = substr(gethostname() ?: 'desconocido', 0, 50) . ':' . getmypid();
 
-    $worker = (new Worker($queue, $logger, $id))
-        ->register(new PurgeAudioHandler($pdo, $logger));
+    $transcriptor = TranscriptionProviders::fromConfig();
 
-    // Los tipos que aún no tienen manejador (transcribe, extract…) no se
+    $worker = (new Worker($queue, $logger, $id))
+        ->register(new PurgeAudioHandler($pdo, $logger))
+        ->register(new TranscribeHandler($pdo, $transcriptor, $logger));
+
+    // Los tipos que aún no tienen manejador (extract, resolve…) no se
     // registran: la cola los aparta sola hasta que su fase se despliegue.
 
     if ($once) {
@@ -102,8 +107,9 @@ try {
     }
 
     $logger->info('Worker arrancado', [
-        'id'    => $id,
-        'types' => $worker->registeredTypes(),
+        'id'            => $id,
+        'types'         => $worker->registeredTypes(),
+        'transcription' => $transcriptor->name(),
     ]);
 
     $recuento = $worker->run(

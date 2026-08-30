@@ -23,7 +23,12 @@ return [
         'transcription' => [
             // ASR real y verbatim. Nunca un LLM multimodal: parafrasea el habla y
             // rompe el anclaje de evidencia (citas literales con offsets).
-            'model'    => env('OPENROUTER_TRANSCRIPTION_MODEL', 'openai/whisper-1'),
+            // Slug verificado contra /models el 2026-08-30. Es la primera
+            // preferencia de docs/api/openrouter.md §1: verbatim, 99+ idiomas,
+            // barato y rápido. Los STT basados en LLM (gpt-4o-transcribe y
+            // compañía) están descartados: «limpian» el habla, y aquí las
+            // muletillas y las frases a medias son señal.
+            'model'    => env('OPENROUTER_TRANSCRIPTION_MODEL', 'openai/whisper-large-v3-turbo'),
             'timeout'  => (int) env('OPENROUTER_TRANSCRIPTION_TIMEOUT', 120),
             'defaults' => [
                 'temperature'             => 0,
@@ -38,6 +43,12 @@ return [
             'model'   => (string) env('OPENROUTER_EXTRACTION_MODEL', ''),
             'timeout' => (int) env('OPENROUTER_EXTRACTION_TIMEOUT', 180),
         ],
+    ],
+
+    // Qué transcriptor se usa. 'fake' permite levantar el sistema entero en
+    // local sin clave y sin pagar una inferencia por cada prueba.
+    'transcription' => [
+        'driver' => (string) env('TRANSCRIPTION_DRIVER', 'openrouter'),
     ],
 
     'audio' => [
