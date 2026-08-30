@@ -14,6 +14,7 @@ use MaiMind\Http\Kernel;
 use MaiMind\Http\Request;
 use MaiMind\Http\Response;
 use MaiMind\Repository\UserRepository;
+use MaiMind\Support\Config;
 use MaiMind\Support\Database;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -88,19 +89,28 @@ abstract class AppTestCase extends TestCase
 
     private function limpiar(): void
     {
-        $ids = $this->pdo
-            ->query("SELECT id FROM users WHERE email LIKE '" . self::EMAIL_PREFIX . "%'")
-            ->fetchAll(PDO::FETCH_COLUMN);
+        $usuarios = $this->pdo
+            ->query("SELECT id, uid FROM users WHERE email LIKE '" . self::EMAIL_PREFIX . "%'")
+            ->fetchAll();
 
-        if ($ids === []) {
+        if ($usuarios === []) {
             return;
+        }
+
+        $ids = array_map(static fn (array $u): int => (int) $u['id'], $usuarios);
+
+        // Solo el audio de los usuarios de prueba, identificados por su uid:
+        // borrar storage/audio entero se llevaría por delante las grabaciones
+        // reales de desarrollo.
+        foreach ($usuarios as $usuario) {
+            $this->borrarArbol(Config::basePath('storage/audio/' . $usuario['uid']));
         }
 
         $marcas = implode(',', array_fill(0, count($ids), '?'));
 
         // Orden importante: las claves foráneas a users son RESTRICT a propósito,
         // para que un borrado accidental no se lleve por delante años de datos.
-        foreach (['entries', 'sessions'] as $tabla) {
+        foreach (['jobs', 'entries', 'sessions'] as $tabla) {
             $this->pdo
                 ->prepare("DELETE FROM {$tabla} WHERE user_id IN ({$marcas})")
                 ->execute($ids);
@@ -108,6 +118,19 @@ abstract class AppTestCase extends TestCase
 
         $this->pdo->prepare("DELETE FROM users WHERE id IN ({$marcas})")->execute($ids);
         $this->pdo->exec('DELETE FROM login_attempts');
+    }
+
+    protected function borrarArbol(string $dir): void
+    {
+        if (! is_dir($dir)) {
+            return;
+        }
+
+        foreach (glob($dir . '/*') ?: [] as $f) {
+            is_dir($f) ? $this->borrarArbol($f) : @unlink($f);
+        }
+
+        @rmdir($dir);
     }
 
     protected function crearUsuario(string $sufijo, string $password = 'contraseña-larga-123'): User

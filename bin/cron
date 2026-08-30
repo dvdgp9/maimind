@@ -1,0 +1,79 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Trabajos periódicos. Una entrada de cron al día:
+ *
+ *   17 4 * * *  cd /ruta/app && php bin/cron diario >> storage/logs/cron.log 2>&1
+ *
+ * Este script **no hace el trabajo**: lo encola. Así la purga tiene una sola
+ * implementación (el manejador del worker), con sus reintentos y su registro,
+ * en vez de dos que se van separando con el tiempo.
+ *
+ *   php bin/cron diario     encola lo de cada día
+ *   php bin/cron purgar     solo la purga de audio
+ */
+
+$app = require dirname(__DIR__) . '/src/bootstrap.php';
+
+use MaiMind\Domain\Jobs\JobQueue;
+use MaiMind\Repository\UserRepository;
+use MaiMind\Support\Database;
+
+$logger  = $app['logger'];
+$comando = $argv[1] ?? 'diario';
+
+if (! in_array($comando, ['diario', 'purgar'], true)) {
+    fwrite(STDERR, "Uso: php bin/cron [diario|purgar]\n");
+    exit(1);
+}
+
+try {
+    $pdo   = Database::connection();
+    $queue = new JobQueue($pdo);
+    $hoy   = gmdate('Y-m-d');
+
+    $encolados = 0;
+
+    foreach ((new UserRepository($pdo))->activeIds() as $userId) {
+        // La clave lleva el día: si el cron se solapa consigo mismo o alguien
+        // lo lanza a mano, no se encola dos veces la purga del mismo usuario.
+        $id = $queue->push(
+            type: 'purge_audio',
+            payload: ['today' => $hoy],
+            userId: $userId,
+            dedupeKey: "purge_audio:{$userId}:{$hoy}",
+            priority: 9, // detrás de cualquier cosa que esté esperando el usuario
+        );
+
+        if ($id !== null) {
+            $encolados++;
+        }
+    }
+
+    $olvidados = 0;
+
+    if ($comando === 'diario') {
+        // La tabla de trabajos no es un archivo histórico. Una semana basta
+        // para investigar qué pasó anteanoche.
+        $olvidados = $queue->forget(7);
+    }
+
+    printf("purga encolada para %d usuarios · %d trabajos antiguos borrados\n", $encolados, $olvidados);
+
+    $logger->info('Cron ejecutado', [
+        'command'  => $comando,
+        'enqueued' => $encolados,
+        'forgotten' => $olvidados,
+    ]);
+
+    exit(0);
+} catch (Throwable $e) {
+    fwrite(STDERR, "\n" . $e->getMessage() . "\n\n");
+
+    $logger->error('Cron fallido', ['error' => $e->getMessage()]);
+
+    exit(1);
+}

@@ -8,6 +8,7 @@ use MaiMind\Domain\Auth\Authenticator;
 use MaiMind\Domain\Capture\AudioStore;
 use MaiMind\Domain\Capture\CaptureClock;
 use MaiMind\Domain\Auth\LoginThrottle;
+use MaiMind\Domain\Jobs\JobQueue;
 use MaiMind\Domain\Auth\PasswordHasher;
 use MaiMind\Domain\Auth\SessionManager;
 use MaiMind\Domain\User;
@@ -393,6 +394,27 @@ final class Kernel
             uid: $uid,
         );
 
+        // A partir de aquí el trabajo es del worker. Encolar puede fallar sin
+        // que la grabación se pierda: el audio y la fila ya están, y el
+        // trabajo se puede volver a encolar. Devolver 500 haría que el cliente
+        // reintentase la subida y duplicase la entrada.
+        try {
+            (new JobQueue($this->pdo))->push(
+                type: 'transcribe',
+                payload: ['entry' => $entryUid],
+                userId: $user->id,
+                // El uid de la entrada es único en todo el sistema, así que
+                // basta él para que un doble envío no pague dos transcripciones.
+                dedupeKey: 'transcribe:' . $entryUid,
+                priority: 3,
+            );
+        } catch (Throwable $e) {
+            $this->logger->error('No se pudo encolar la transcripción', [
+                'entry' => $entryUid,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         // Nunca la transcripción ni el contenido: solo identificadores.
         $this->logger->info('Captura recibida', [
             'user_id'  => $user->id,
@@ -401,11 +423,13 @@ final class Kernel
             'has_mood' => $moodHint !== null,
         ]);
 
+        // 202 y no 201: la grabación está guardada, pero el trabajo sobre ella
+        // acaba de empezar. El usuario ya puede cerrar la aplicación.
         return Response::json([
             'uid'        => $entryUid,
             'local_date' => $clock['local_date'],
             'state'      => 'captured',
-        ], 201);
+        ], 202);
     }
 
     private function moodHint(?string $raw): ?int

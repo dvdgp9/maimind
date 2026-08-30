@@ -98,4 +98,20 @@ final class UserRepository
 
         return $stmt->fetchColumn() !== false;
     }
+
+    /**
+     * Ids de las cuentas vivas, para el trabajo periódico que encola una tarea
+     * por usuario. Incluye las suspendidas a propósito: suspender una cuenta no
+     * congela su plazo de retención de audio.
+     *
+     * @return list<int>
+     */
+    public function activeIds(): array
+    {
+        $ids = $this->pdo
+            ->query('SELECT id FROM users WHERE deleted_at IS NULL ORDER BY id')
+            ->fetchAll(PDO::FETCH_COLUMN);
+
+        return array_map(intval(...), $ids);
+    }
 }

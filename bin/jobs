@@ -1,0 +1,100 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Inspección de la cola.
+ *
+ *   php bin/jobs                 resumen y últimos trabajos
+ *   php bin/jobs dead            los que ya no vuelven solos, con su error
+ *   php bin/jobs retry 42        devuelve el 42 a la cola con los intentos a cero
+ *   php bin/jobs retry dead      lo mismo con todos los muertos
+ */
+
+$app = require dirname(__DIR__) . '/src/bootstrap.php';
+
+use MaiMind\Domain\Jobs\JobQueue;
+use MaiMind\Support\Database;
+
+$comando = $argv[1] ?? 'status';
+$objetivo = $argv[2] ?? null;
+
+try {
+    $queue = new JobQueue(Database::connection());
+
+    if ($comando === 'retry') {
+        if ($objetivo === null) {
+            fwrite(STDERR, "Uso: php bin/jobs retry <id|dead>\n");
+            exit(1);
+        }
+
+        if ($objetivo === 'dead') {
+            $n = 0;
+
+            foreach ($queue->recent(500, JobQueue::DEAD) as $job) {
+                $n += $queue->retry((int) $job['id']) ? 1 : 0;
+            }
+
+            echo "{$n} trabajos devueltos a la cola.\n";
+            exit(0);
+        }
+
+        if (! $queue->retry((int) $objetivo)) {
+            fwrite(STDERR, "El trabajo {$objetivo} no existe o no está muerto ni fallido.\n");
+            exit(1);
+        }
+
+        echo "Trabajo {$objetivo} devuelto a la cola.\n";
+        exit(0);
+    }
+
+    $estado = $comando === 'status' ? null : $comando;
+
+    if ($estado !== null && ! in_array($estado, [
+        JobQueue::PENDING, JobQueue::RUNNING, JobQueue::DONE, JobQueue::FAILED, JobQueue::DEAD,
+    ], true)) {
+        fwrite(STDERR, "Estado desconocido: {$estado}\n");
+        exit(1);
+    }
+
+    $counts = $queue->countsByState();
+
+    echo "\nCola\n\n";
+
+    foreach ($counts as $nombre => $n) {
+        printf("  %-9s %4d\n", $nombre, $n);
+    }
+
+    $trabajos = $queue->recent(20, $estado);
+
+    if ($trabajos === []) {
+        echo "\n  (sin trabajos)\n\n";
+        exit(0);
+    }
+
+    echo "\n  id     tipo             estado    int.  ejecutable desde\n";
+    echo   "  ────────────────────────────────────────────────────────────\n";
+
+    foreach ($trabajos as $job) {
+        printf(
+            "  %-6d %-16s %-9s %d/%-3d %s\n",
+            $job['id'],
+            mb_substr((string) $job['type'], 0, 16),
+            $job['state'],
+            $job['attempts'],
+            $job['max_attempts'],
+            $job['run_after'],
+        );
+
+        if ($job['last_error'] !== null) {
+            printf("         └─ %s\n", mb_substr((string) $job['last_error'], 0, 100));
+        }
+    }
+
+    echo "\n";
+    exit(0);
+} catch (Throwable $e) {
+    fwrite(STDERR, "\n" . $e->getMessage() . "\n\n");
+    exit(1);
+}

@@ -7,8 +7,7 @@ namespace MaiMind\Repository;
 use MaiMind\Support\Ulid;
 
 /**
- * Registros de captura. De momento solo lo imprescindible para demostrar el
- * aislamiento entre usuarios; la API de captura completa llega en la tarea 1.2.
+ * Registros de captura.
  */
 final class EntryRepository extends UserScopedRepository
 {
@@ -106,6 +105,56 @@ final class EntryRepository extends UserScopedRepository
                 'pipeline_state'    => 'captured',
             ],
         );
+    }
+
+    /**
+     * Grabaciones cuyo plazo de retención ha vencido.
+     *
+     * A propósito **sin** el filtro de borrado lógico que pone la clase base:
+     * una entrada en la papelera es justamente la que más urge purgar. Guardar
+     * su audio treinta días más porque el usuario la borró sería lo contrario
+     * de lo que pidió.
+     *
+     * @return list<array{uid:string,audio_path:string}>
+     */
+    public function audioDuePurge(string $today, int $limit = 500): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT uid, audio_path
+               FROM entries
+              WHERE user_id = ?
+                AND audio_state = ?
+                AND audio_path IS NOT NULL
+                AND audio_purge_after IS NOT NULL
+                AND audio_purge_after <= ?
+              ORDER BY audio_purge_after ASC
+              LIMIT ' . max(1, $limit)
+        );
+
+        $stmt->execute([$this->userId, 'present', $today]);
+
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Marca el audio como purgado.
+     *
+     * `audio_path` se pone a NULL porque el fichero ya no está: dejar la ruta
+     * escrita sería guardar una mentira comprobable. El sha256, el tamaño y la
+     * duración se conservan — describen lo que hubo, no dónde estaba, y sin
+     * ellos no habría forma de saber si dos grabaciones eran la misma.
+     */
+    public function markAudioPurged(string $uid): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE entries
+                SET audio_state = ?, audio_path = NULL
+              WHERE user_id = ? AND uid = ? AND audio_state = ?'
+        );
+
+        $stmt->execute(['purged', $this->userId, $uid, 'present']);
+
+        return $stmt->rowCount() === 1;
     }
 
     /** @return array<string,mixed>|null */

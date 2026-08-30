@@ -1,0 +1,115 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Worker de la cola.
+ *
+ *   php bin/worker                 bucle continuo (lo que arranca systemd)
+ *   php bin/worker --once          vacía lo que haya ejecutable y sale
+ *   php bin/worker --max=10        procesa como mucho 10 trabajos y sale
+ *
+ * Termina de forma ordenada con SIGTERM o Ctrl-C: acaba el trabajo que tenga
+ * entre manos y entonces sale. Matarlo a lo bruto tampoco pierde nada — el
+ * trabajo se queda 'running' y otro worker lo recupera pasado el tiempo de
+ * gracia — pero deja la fila en el aire un rato para nada.
+ */
+
+$app = require dirname(__DIR__) . '/src/bootstrap.php';
+
+use MaiMind\Domain\Jobs\Handlers\PurgeAudioHandler;
+use MaiMind\Domain\Jobs\JobQueue;
+use MaiMind\Domain\Jobs\Worker;
+use MaiMind\Support\Database;
+
+$logger = $app['logger'];
+
+$once = false;
+$max  = (int) config('services.worker.max_jobs_per_run', 50);
+
+foreach (array_slice($argv, 1) as $arg) {
+    if ($arg === '--once') {
+        $once = true;
+
+        continue;
+    }
+
+    if (str_starts_with($arg, '--max=')) {
+        $max = max(1, (int) substr($arg, 6));
+
+        continue;
+    }
+
+    fwrite(STDERR, "Opción desconocida: {$arg}\n");
+    exit(1);
+}
+
+try {
+    $pdo   = Database::connection();
+    $queue = new JobQueue($pdo);
+
+    // Identificador del worker: máquina y pid. Sirve para saber quién tiene
+    // bloqueada una fila cuando algo se queda colgado a las tres de la mañana.
+    $id = substr(gethostname() ?: 'desconocido', 0, 50) . ':' . getmypid();
+
+    $worker = (new Worker($queue, $logger, $id))
+        ->register(new PurgeAudioHandler($pdo, $logger));
+
+    // Los tipos que aún no tienen manejador (transcribe, extract…) no se
+    // registran: la cola los aparta sola hasta que su fase se despliegue.
+
+    if ($once) {
+        $recuento = $worker->drain($max);
+
+        printf(
+            "hechos %d · reintentables %d · muertos %d · aplazados %d\n",
+            $recuento['done'],
+            $recuento['pending'],
+            $recuento['dead'],
+            $recuento['deferred'],
+        );
+
+        exit(0);
+    }
+
+    if (function_exists('pcntl_async_signals')) {
+        pcntl_async_signals(true);
+
+        $manejador = static function (int $senal) use ($worker, $logger): void {
+            $worker->stop();
+            $logger->info('Worker: parada solicitada', ['signal' => $senal]);
+        };
+
+        pcntl_signal(SIGTERM, $manejador);
+        pcntl_signal(SIGINT, $manejador);
+    } else {
+        // Sin pcntl no hay parada ordenada. Mejor decirlo que descubrirlo.
+        $logger->warning('Worker sin pcntl: no habrá parada ordenada.');
+    }
+
+    $logger->info('Worker arrancado', [
+        'id'    => $id,
+        'types' => $worker->registeredTypes(),
+    ]);
+
+    $recuento = $worker->run(
+        maxJobs: $max,
+        sleepSeconds: (int) config('services.worker.sleep_seconds', 5),
+    );
+
+    $logger->info('Worker parado', $recuento);
+
+    // Salida 0 también al agotar --max: systemd lo rearranca y así el proceso
+    // no acumula memoria durante semanas.
+    exit(0);
+} catch (Throwable $e) {
+    fwrite(STDERR, "\n" . $e->getMessage() . "\n\n");
+
+    $logger->error('Worker caído', [
+        'error' => $e->getMessage(),
+        'file'  => $e->getFile() . ':' . $e->getLine(),
+    ]);
+
+    exit(1);
+}

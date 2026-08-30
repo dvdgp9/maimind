@@ -6,6 +6,7 @@ namespace MaiMind\Tests\Http;
 
 use MaiMind\Domain\Auth\SessionManager;
 use MaiMind\Domain\Capture\AudioStore;
+use MaiMind\Domain\Jobs\JobQueue;
 use MaiMind\Http\Request;
 use MaiMind\Repository\EntryRepository;
 use MaiMind\Support\Config;
@@ -22,31 +23,8 @@ final class CapturaTest extends AppTestCase
             @unlink($f);
         }
 
-        // Solo el audio de los usuarios de prueba, identificados por su uid:
-        // borrar todo storage/audio se llevaría por delante grabaciones reales
-        // de desarrollo.
-        $uids = $this->pdo->query(
-            "SELECT uid FROM users WHERE email LIKE '" . self::EMAIL_PREFIX . "%'"
-        )->fetchAll(\PDO::FETCH_COLUMN);
-
-        foreach ($uids as $uid) {
-            $dir = Config::basePath('storage/audio/' . $uid);
-
-            if (is_dir($dir)) {
-                $this->borrarArbol($dir);
-            }
-        }
-
+        // El audio de los usuarios de prueba lo limpia AppTestCase.
         parent::tearDown();
-    }
-
-    private function borrarArbol(string $dir): void
-    {
-        foreach (glob($dir . '/*') ?: [] as $f) {
-            is_dir($f) ? $this->borrarArbol($f) : @unlink($f);
-        }
-
-        @rmdir($dir);
     }
 
     /** Simula un fichero subido. @return array<string,mixed> */
@@ -96,7 +74,9 @@ final class CapturaTest extends AppTestCase
 
         $respuesta = $this->subir($token, ['mood_hint' => '4']);
 
-        $this->assertSame(201, $respuesta->status);
+        // 202 y no 201: la grabación está guardada, pero lo que se hará con
+        // ella acaba de encolarse.
+        $this->assertSame(202, $respuesta->status);
 
         $cuerpo = json_decode($respuesta->body, true);
         $this->assertArrayHasKey('uid', $cuerpo);
@@ -194,7 +174,7 @@ final class CapturaTest extends AppTestCase
 
         $respuesta = $this->subir($token, ['mood_hint' => '99']);
 
-        $this->assertSame(201, $respuesta->status);
+        $this->assertSame(202, $respuesta->status);
 
         $fila = (new EntryRepository($this->pdo, $a->id))
             ->findByUid(json_decode($respuesta->body, true)['uid']);
@@ -349,5 +329,37 @@ final class CapturaTest extends AppTestCase
         $this->assertFalse($store->delete('../.env'));
         $this->assertFalse($store->delete('../../etc/passwd'));
         $this->assertFileExists(Config::basePath('.env'));
+    }
+
+    public function test_una_grabacion_encola_su_transcripcion(): void
+    {
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $uid = json_decode($this->subir($token)->body, true)['uid'];
+
+        $stmt = $this->pdo->prepare(
+            'SELECT * FROM jobs WHERE user_id = ? AND type = ?'
+        );
+        $stmt->execute([$a->id, 'transcribe']);
+
+        $trabajos = $stmt->fetchAll();
+
+        $this->assertCount(1, $trabajos);
+        $this->assertSame(JobQueue::PENDING, $trabajos[0]['state']);
+        $this->assertSame(['entry' => $uid], JobQueue::payloadOf($trabajos[0]));
+    }
+
+    public function test_el_trabajo_de_transcripcion_pertenece_a_quien_grabo(): void
+    {
+        $a = $this->crearUsuario('a');
+        $b = $this->crearUsuario('b');
+
+        $this->subir($this->iniciarSesion($a));
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM jobs WHERE user_id = ?');
+        $stmt->execute([$b->id]);
+
+        $this->assertSame(0, (int) $stmt->fetchColumn());
     }
 }

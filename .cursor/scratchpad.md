@@ -189,8 +189,8 @@ profesionales. Se detallarán al llegar: diseñarlas ahora sin datos reales es a
 - [x] 0.5 Seed del catálogo core de variables
 - [x] 0.6 Auth y aislamiento multiusuario
 - [x] 1.1 Pantalla de grabación
-- [ ] 1.2 API de captura y almacenamiento
-- [ ] 1.3 Cola de trabajos y worker
+- [x] 1.2 API de captura y almacenamiento
+- [x] 1.3 Cola de trabajos y worker
 - [ ] 1.4 Modo offline del cliente
 
 ---
@@ -413,6 +413,64 @@ en la verificación extremo a extremo, no en los tests.
 Pendiente para 1.2: purga real del audio a los 30 días, y encolar el trabajo de
 transcripción (necesita 1.3).
 
+**2026-08-30 — Executor, tareas 1.3 y 1.2 terminadas.**
+
+Se hicieron en este orden a propósito: al leer el código, 1.2 ya estaba escrita
+casi entera dentro de 1.1 (validación, guardado fuera de `public/`, sha256, hora
+local y offset), y lo que le faltaba —purga real y encolado— **dependía de 1.3**,
+no al revés.
+
+**La cola.** `JobQueue` sobre la tabla `jobs`, sin Redis ni servicio aparte: la
+máquina comparte dos núcleos y la cola va a ver decenas de trabajos al día, no
+miles por segundo. Decisiones que no son de estilo:
+
+- **El intento se suma al reclamar, no al fallar.** Si un trabajo tumba al worker
+  (OOM, `kill -9`), no hay nadie que registre el fallo y ese trabajo volvería a
+  tumbarlo para siempre. Sumando al reclamar, un trabajo venenoso se muere solo.
+- **`dedupe_key` con unicidad en el motor** (migración `004`), no comprobación en
+  PHP: dos procesos ganan una comprobación a la vez, una UNIQUE KEY no. Se apoya
+  a propósito en que NULL no colisiona —la misma regla que obligó a `user_id = 0`
+  en los catálogos, aquí a favor— y la clave se pone a NULL al terminar, para que
+  el mismo trabajo se pueda encolar mañana.
+- **Un tipo sin manejador se aplaza, no se mata.** `transcribe` ya se encola hoy
+  aunque la fase 2 no exista: el trabajo es correcto, lo que falta es el código
+  que lo atiende. Se aparta una hora sin gastar intentos y **se ejecutará solo
+  cuando la fase 2 llegue al servidor**, sobre el audio que todavía esté en plazo.
+  `bin/jobs` los saca a la vista para que un tipo mal escrito no espere eternamente.
+- Sin rollback de trabajos a medias: cada manejador debe ser idempotente, y está
+  escrito en la interfaz.
+
+**La purga.** `PurgeAudioHandler`, **un trabajo por usuario y no uno global**. Con
+un solo SELECT sobre toda la tabla sería más corto, pero entonces existiría en el
+sistema un sitio que lee entradas sin filtrar por usuario, que es justo la grieta
+que la regla de aislamiento existe para no tener. `bin/cron` encola; el worker
+purga. Una sola implementación, con reintentos y registro.
+
+**La captura ahora responde 202 y no 201**, que es lo que dice el plan: la
+grabación está guardada, pero el trabajo sobre ella acaba de empezar. Encolar
+puede fallar sin que la grabación se pierda — devolver 500 haría que el cliente
+reintentase la subida y duplicase la entrada.
+
+Piezas nuevas: `bin/worker` (parada ordenada con SIGTERM), `bin/cron`, `bin/jobs`,
+`deploy/maimind-worker.service`, y cinco comprobaciones más en `bin/check`
+(incluida la de que el motor admite `SKIP LOCKED`). `bin/deploy` reinicia el
+worker.
+
+**186 tests, 1270 aserciones, en verde.**
+
+Criterio de éxito de 1.3 cumplido y **verificado por partida doble**: el test de
+concurrencia retiene el bloqueo de una fila desde una conexión y comprueba que
+la otra coge la siguiente en vez de esperarla. Para que no fuera un test que pasa
+por casualidad, se quitó `SKIP LOCKED` a mano y se comprobó que entonces **falla
+de verdad**: 50 s bloqueado y `SQLSTATE[HY000] 1205 Lock wait timeout exceeded`.
+
+Criterio de 1.2 cumplido y verificado de extremo a extremo con los ejecutables
+reales: `bin/cron` encoló, encolar dos veces no duplicó, `bin/worker --once`
+borró **el fichero vencido y solo ese** (el que estaba en plazo siguió en disco),
+y la fila quedó en `purged` con `audio_path` a NULL.
+
+Un fallo real encontrado y corregido (ver Lessons).
+
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue
 - D10 política de datos de OpenRouter → **antes de enviar la primera transcripción real**
@@ -441,7 +499,9 @@ Verificado desde fuera: HTTP redirige a HTTPS, registro y sesión funcionan, la 
 `Secure` y `HttpOnly`, y ninguna ruta sensible responde. El arreglo de `open_basedir`
 sobrevivió a las operaciones de Hestia (emisión de certificado y forzado de SSL).
 
-Pendiente: cron de purga de audio (necesita 1.2) y worker (1.3).
+Worker y cron escritos y documentados (`deploy/maimind-worker.service`, `bin/cron`).
+**Pendiente de instalar en el servidor**: copiar la unidad, `systemctl enable --now`
+y añadir la entrada de cron. Instrucciones en `docs/despliegue.md`.
 
 ## Convenciones acordadas
 
@@ -490,6 +550,19 @@ Pendiente: cron de purga de audio (necesita 1.2) y worker (1.3).
 - Se pueden combinar `time_zone`, `sql_mode` y `collation_connection` en un solo `SET`, que
   es lo que permite meterlos todos en `MYSQL_ATTR_INIT_COMMAND` (solo admite una sentencia)
   y que se reapliquen al reconectar.
+- **Las funciones flecha capturan por valor, siempre.** El worker paraba con
+  `shouldStop: fn () => $parar` y el manejador de SIGTERM escribía en `$parar`:
+  la señal llegaba, se registraba en el log, y el proceso seguía corriendo tan
+  tranquilo, porque la flecha se había quedado con el `false` del arranque. `use
+  (&$x)` lo arregla, pero lo que se hizo fue quitar la variable de en medio: el
+  estado de parada vive ahora dentro del Worker (`stop()`), donde no hay captura
+  que equivocar y además se puede testear. **Solo apareció en la verificación
+  real**, no en los tests.
+- **Un test de concurrencia hay que romperlo para creérselo.** El de `SKIP
+  LOCKED` pasaba; quitando `SKIP LOCKED` del SQL, pasaba igual de rápido hasta
+  que se le añadió la retención del bloqueo desde otra conexión. Solo entonces
+  falló como debía (1205, *lock wait timeout*, tras 50 s). Un test de exclusión
+  mutua que nunca se ha visto fallar no prueba nada.
 - **El vocabulario emocional no se traduce, se diseña.** *Ilusión* no tiene equivalente limpio
   en inglés; *vergüenza* se reparte entre *shame* y *embarrassment*. Un catálogo core traducido
   produce un vocabulario sutilmente equivocado, y sobre ese catálogo se apoya todo el análisis.

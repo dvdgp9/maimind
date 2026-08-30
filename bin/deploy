@@ -35,6 +35,18 @@ chgrp -R "$WEBGROUP" "$APP/storage"
 chmod -R 2770 "$APP/storage"
 chmod 600 "$APP/.env"
 
+echo "==> Worker"
+# Rearranque, no recarga: el worker lleva el código en memoria y sin reiniciarlo
+# seguiría ejecutando la versión anterior. Si la unidad no está instalada aún,
+# no es un error: se instala una vez, a mano (ver docs/despliegue.md).
+if systemctl list-unit-files maimind-worker.service >/dev/null 2>&1 \
+   && systemctl is-enabled maimind-worker >/dev/null 2>&1; then
+  systemctl restart maimind-worker
+  echo "    reiniciado"
+else
+  echo "    unidad no instalada — ver docs/despliegue.md"
+fi
+
 echo "==> Comprobación"
 php bin/check
 

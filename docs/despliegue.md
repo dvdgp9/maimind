@@ -71,7 +71,47 @@ sudo /usr/local/hestia/bin/v-add-letsencrypt-domain dvdgp maimind.iaiapro.com
 **HTTPS no es opcional**: `getUserMedia` solo funciona en contexto seguro, así que sin
 certificado la aplicación no puede grabar, que es lo único que hace.
 
+## Worker de la cola
+
+El worker procesa la cola `jobs`: hoy, la purga de audio; a partir de la fase 2,
+la transcripción y la extracción.
+
+```bash
+sudo cp deploy/maimind-worker.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now maimind-worker
+sudo journalctl -u maimind-worker -f
+```
+
+El proceso **sale solo** al llegar a `WORKER_MAX_JOBS_PER_RUN` y systemd lo
+vuelve a levantar. No es un fallo: un PHP que vive semanas acumula memoria.
+
+Concurrencia 1, `Nice=10` e `IOSchedulingClass=idle`: la máquina comparte dos
+núcleos con el correo y con iaiaPRO, y el worker no puede competir con ellos.
+
+Inspección desde la línea de órdenes:
+
+```bash
+php bin/jobs            # resumen y últimos trabajos
+php bin/jobs dead       # los que ya no vuelven solos, con su error
+php bin/jobs retry 42   # devolver uno a la cola
+php bin/worker --once   # vaciar la cola a mano y salir
+```
+
+## Cron
+
+Una entrada al día. Encola la purga de audio de cada usuario y borra los
+trabajos ya hechos de hace más de una semana:
+
+```
+17 4 * * * cd /home/dvdgp/web/maimind.iaiapro.com/public_html && /usr/bin/php8.3 bin/cron diario >> storage/logs/cron.log 2>&1
+```
+
+El cron **no purga**: encola. Así la purga tiene una sola implementación —el
+manejador del worker, con sus reintentos y su registro— en vez de dos que se
+van separando con el tiempo. Lanzarlo dos veces el mismo día no encola nada la
+segunda vez.
+
 ## Pendiente
 
-- Cron de purga de audio a los 30 días (necesita la tarea 1.2).
-- Worker de la cola (tarea 1.3).
+- Nada del despliegue. Lo siguiente es la tarea 1.4 (modo offline del cliente).

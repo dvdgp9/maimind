@@ -19,6 +19,7 @@ use MaiMind\Support\Ulid;
 
 $failures = [];
 $results  = [];
+$warnings = [];
 
 function check(string $label, bool $ok, string $detail = ''): void
 {
@@ -159,6 +160,51 @@ if ($pdo !== null) {
 
     $stmt = $pdo->query("SELECT 'ñandú €' AS s");
     check('utf8mb4 de ida y vuelta', $stmt?->fetchColumn() === 'ñandú €');
+
+    // --- Cola de trabajos ----------------------------------------------
+    // Sin SKIP LOCKED la cola sigue funcionando con un worker, pero dos se
+    // bloquean el uno al otro hasta el lock_wait_timeout. Vale más saberlo
+    // aquí que a las tres de la mañana.
+    $skipLocked = true;
+
+    try {
+        $pdo->beginTransaction();
+        $pdo->query('SELECT id FROM jobs LIMIT 1 FOR UPDATE SKIP LOCKED')?->fetchAll();
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        $skipLocked = false;
+    }
+
+    check('la cola admite FOR UPDATE SKIP LOCKED', $skipLocked);
+
+    $dedupe = (int) $pdo->query(
+        "SELECT COUNT(*) FROM information_schema.STATISTICS
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'jobs'
+            AND INDEX_NAME = 'uq_jobs_dedupe'"
+    )->fetchColumn();
+
+    check('la cola tiene clave de deduplicación', $dedupe > 0);
+
+    // Trabajos atascados: llevan tiempo marcados como en ejecución sin que
+    // nadie los toque. El worker los recupera solo, pero si son muchos es que
+    // el worker no está corriendo.
+    $atascados = (int) $pdo->query(
+        "SELECT COUNT(*) FROM jobs
+          WHERE state = 'running' AND locked_at < UTC_TIMESTAMP(3) - INTERVAL 30 MINUTE"
+    )->fetchColumn();
+
+    check(
+        'sin trabajos atascados',
+        $atascados === 0,
+        $atascados === 0 ? '' : $atascados . ' llevan rato en ejecución: ¿está corriendo el worker?',
+    );
+
+    $muertos = (int) $pdo->query("SELECT COUNT(*) FROM jobs WHERE state = 'dead'")->fetchColumn();
+
+    if ($muertos > 0) {
+        $warnings[] = $muertos . ' trabajo(s) muerto(s) en la cola: php bin/jobs dead';
+    }
 }
 
 // --- Logger -------------------------------------------------------------
@@ -167,7 +213,6 @@ $logFile = Config::basePath((string) config('app.paths.logs')) . '/app-' . gmdat
 check('logger escribe a fichero', is_file($logFile));
 
 // --- Configuración pendiente -------------------------------------------
-$warnings = [];
 
 if ((string) config('services.openrouter.api_key') === '') {
     $warnings[] = 'OPENROUTER_API_KEY vacía (hace falta en la fase 2)';

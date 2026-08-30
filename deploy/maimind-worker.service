@@ -1,0 +1,50 @@
+# Worker de la cola de MaiMind.
+#
+#   sudo cp deploy/maimind-worker.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now maimind-worker
+#   sudo journalctl -u maimind-worker -f
+#
+# Concurrencia 1 a propósito: la máquina comparte dos núcleos con el correo y
+# con iaiaPRO, y el trabajo del worker es esperar a APIs, no calcular.
+
+[Unit]
+Description=MaiMind · worker de la cola de trabajos
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dvdgp
+Group=dvdgp
+WorkingDirectory=/home/dvdgp/web/maimind.iaiapro.com/public_html
+ExecStart=/usr/bin/php8.3 bin/worker
+
+# El proceso sale solo al llegar a WORKER_MAX_JOBS_PER_RUN y systemd lo levanta
+# otra vez. Un proceso PHP que vive semanas acaba acumulando memoria; uno que se
+# recicla cada pocas decenas de trabajos, no.
+Restart=always
+RestartSec=5
+
+# Nunca por delante del correo ni del servidor web.
+Nice=10
+IOSchedulingClass=idle
+
+# Parada ordenada: bin/worker atiende SIGTERM y acaba el trabajo que tenga
+# entre manos. 90 s cubre de sobra la transcripción más lenta.
+KillSignal=SIGTERM
+TimeoutStopSec=90
+
+# La aplicación no necesita escribir en ningún otro sitio de la máquina.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/dvdgp/web/maimind.iaiapro.com/public_html/storage
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=maimind-worker
+
+[Install]
+WantedBy=multi-user.target
