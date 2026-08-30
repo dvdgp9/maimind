@@ -144,8 +144,11 @@ cerrar sesión— no se puede comprobar buscando cadenas.
 ## OpenRouter: la parte que hay que hacer a mano
 
 El código manda `data_collection: "deny"` y `zdr: true` en **cada** petición, y
-`bin/check` falla si esa política se afloja. Pero conviene activarlo también en
-la cuenta, que es lo que cubre cualquier petición que se escape del código:
+`bin/check` falla si esa política se afloja. Con eso MaiMind está cubierta.
+
+**Pendiente a propósito**: activarlo también en la cuenta. Es la red que cubriría
+una petición que se escapara del código. Aplazado porque esa cuenta la comparten
+otras APIs y restringir el enrutado a nivel de cuenta podría afectarlas.
 
 > openrouter.ai → **Settings → Privacy** → desactivar los endpoints que
 > entrenan o retienen datos.

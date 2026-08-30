@@ -193,8 +193,9 @@ profesionales. Se detallarán al llegar: diseñarlas ahora sin datos reales es a
 - [x] 1.3 Cola de trabajos y worker
 - [x] 1.4 Modo offline del cliente
 - [x] 1.5 PWA instalable — **FASE 1 COMPLETA**
-- [x] D10 Política de datos de OpenRouter — *falta activarlo en la cuenta (usuario)*
-- [ ] 2.1 Interfaz TranscriptionProvider + implementación falsa
+- [x] D10 Política de datos de OpenRouter — *ajuste de cuenta aplazado a propósito*
+- [x] 2.1 Interfaz TranscriptionProvider + implementación falsa
+- [ ] 2.2 Implementación OpenRouter + job transcribe + coste real
 
 ---
 
@@ -617,10 +618,50 @@ nada. `bin/check` lo comprueba.
 
 **215 tests de PHP (1399 aserciones) y 11 de JavaScript, en verde.**
 
-⚠️ **Queda una acción manual del usuario**: activar la restricción también en la
-cuenta de OpenRouter (Settings → Privacy). El código no puede hacerlo.
+**Ajuste de cuenta aplazado, decisión del usuario (2026-08-30).** La cuenta de
+OpenRouter la comparten otras APIs suyas y restringir el enrutado a nivel de
+cuenta podría dejarlas sin proveedores. Lo hará cuando empiece a usar MaiMind de
+verdad.
+
+**Esto no deja MaiMind expuesta**: la política va en cada petición, y por petición
+solo se puede restringir más. Lo que se pierde es la red de seguridad para una
+petición que se escapara del código, y hoy no hay ninguna — `DataPolicy` es el
+único sitio que construye ese bloque.
 
 Documentado en `docs/api/openrouter.md` §4, con la fuente y la fecha.
+
+**2026-08-30 — Executor, tarea 2.1 terminada.**
+
+`TranscriptionProvider` con `AudioRef`, `TranscriptionResult`,
+`TranscriptionSegment`, `TranscriptionFailed` y `FakeTranscriptionProvider`.
+
+Tres decisiones que no son de forma:
+
+- **Las cifras derivadas las calcula el resultado**, no las pasa el proveedor:
+  número de palabras y confianza media salen del texto y de los tramos. Si las
+  pasara cada proveedor, dos contarían distinto y compararlos —que es media
+  razón de tener interfaces— dejaría de significar nada.
+- **El anclaje busca cada tramo en el texto en vez de sumar longitudes.** Los
+  proveedores meten y quitan espacios entre tramos; sumando, el desfase se
+  acumula y las citas acaban señalando otra palabra. Un tramo que no aparezca
+  se queda **sin** anclaje: inventarle unos offsets sería peor que no tenerlos,
+  porque la cita apuntaría a palabras que esa persona no dijo. Los offsets van
+  en **caracteres, no en bytes** — en español, en bytes señalarían media letra.
+- **El fallo sabe si conviene repetirlo.** La cola no puede adivinarlo, y las
+  dos equivocaciones cuestan: reintentar cinco veces un audio que nunca se va a
+  aceptar son cinco llamadas de pago tiradas, y dar por muerta una que solo
+  falló porque la API estaba caída pierde la grabación. 401 cuenta como
+  temporal a propósito: una clave mal puesta se arregla en el servidor sin
+  tocar la cola.
+
+El falso vive en `src/` y no en `tests/`: sirve también para levantar el sistema
+en local sin clave y sin pagar una inferencia cada vez que se prueba una
+pantalla. Lleva guion —puede fallar dos veces y a la tercera ir bien, que es el
+caso que de verdad preocupa en la cola— y recuerda con qué se le llamó, porque
+media parte de lo que puede salir mal en la fase 2 es mandar el audio
+equivocado, no interpretar mal la respuesta.
+
+**239 tests de PHP (1453 aserciones) y 11 de JavaScript, en verde.**
 
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue
