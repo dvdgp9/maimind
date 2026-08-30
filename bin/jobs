@@ -10,6 +10,8 @@ declare(strict_types=1);
  *   php bin/jobs dead            los que ya no vuelven solos, con su error
  *   php bin/jobs retry 42        devuelve el 42 a la cola con los intentos a cero
  *   php bin/jobs retry dead      lo mismo con todos los muertos
+ *   php bin/jobs now             adelanta los pendientes que esperan turno
+ *   php bin/jobs now transcribe  solo los de ese tipo
  */
 
 $app = require dirname(__DIR__) . '/src/bootstrap.php';
@@ -46,6 +48,18 @@ try {
         }
 
         echo "Trabajo {$objetivo} devuelto a la cola.\n";
+        exit(0);
+    }
+
+    if ($comando === 'now') {
+        // Los aparcados por no tener manejador esperan una hora. Tras
+        // desplegar la fase que los implementa, esto los despierta.
+        $n = $queue->runNow(
+            type: $objetivo !== null && ! ctype_digit($objetivo) ? $objetivo : null,
+            id: $objetivo !== null && ctype_digit($objetivo) ? (int) $objetivo : null,
+        );
+
+        echo "{$n} trabajo(s) adelantado(s). El worker los cogerá enseguida.\n";
         exit(0);
     }
 

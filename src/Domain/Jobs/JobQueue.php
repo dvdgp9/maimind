@@ -319,6 +319,42 @@ final class JobQueue
         return $stmt->fetchAll();
     }
 
+    /**
+     * Adelanta un trabajo que está esperando su turno.
+     *
+     * Existe por un caso concreto: los trabajos aparcados por no tener
+     * manejador se reprograman a una hora vista, y al desplegar la fase que
+     * los implementa no hay forma de decirles «ya puedes». Esperar una hora
+     * funciona, pero no sirve para comprobar que el despliegue ha ido bien.
+     *
+     * Solo toca los que ya están pendientes: no revive muertos —para eso está
+     * retry()— ni le quita un trabajo a un worker que lo esté ejecutando.
+     *
+     * @param  string|null  $type  null = todos los pendientes que esperan
+     * @return int  cuántos se han adelantado
+     */
+    public function runNow(?string $type = null, ?int $id = null): int
+    {
+        $sql    = 'UPDATE jobs SET run_after = UTC_TIMESTAMP(3)
+                    WHERE state = ? AND run_after > UTC_TIMESTAMP(3)';
+        $params = [self::PENDING];
+
+        if ($type !== null) {
+            $sql     .= ' AND type = ?';
+            $params[] = $type;
+        }
+
+        if ($id !== null) {
+            $sql     .= ' AND id = ?';
+            $params[] = $id;
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->rowCount();
+    }
+
     /** Devuelve a la cola un trabajo muerto, con los intentos a cero. */
     public function retry(int $id): bool
     {

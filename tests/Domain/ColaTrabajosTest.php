@@ -76,6 +76,46 @@ final class ColaTrabajosTest extends TestCase
      * sin filtro se lleva lo primero que haya en la cola de desarrollo. Costó
      * un fallo que no era del código.
      */
+    public function test_se_puede_adelantar_un_trabajo_que_espera_turno(): void
+    {
+        // Los aparcados por no tener manejador se reprograman a una hora vista.
+        // Al desplegar la fase que los implementa hacía falta una forma de
+        // decirles «ya puedes»; sin ella, comprobar que el despliegue funcionó
+        // exigía esperar una hora. Salió al usarlo de verdad en producción.
+        $id = $this->queue->push($this->tipo(), delaySeconds: 3600);
+
+        $this->assertNull($this->reclamar(), 'Todavía no le tocaba');
+
+        $this->assertSame(1, $this->queue->runNow($this->tipo()));
+        $this->assertNotNull($this->reclamar(), 'Sigue sin poder reclamarse');
+    }
+
+    public function test_adelantar_no_revive_muertos_ni_roba_lo_que_se_esta_ejecutando(): void
+    {
+        $muerto = $this->queue->push($this->tipo(), maxAttempts: 1);
+        $this->reclamar();
+        $this->queue->fail($muerto, 'roto');
+
+        $corriendo = $this->queue->push($this->tipo('otro'));
+        $this->queue->claim('otro-worker', [$this->tipo('otro')]);
+
+        $this->assertSame(0, $this->queue->runNow());
+
+        $this->assertSame(JobQueue::DEAD, $this->queue->find($muerto)['state']);
+        $this->assertSame(JobQueue::RUNNING, $this->queue->find($corriendo)['state']);
+    }
+
+    public function test_adelantar_puede_acotarse_por_tipo(): void
+    {
+        $este = $this->queue->push($this->tipo(), delaySeconds: 3600);
+        $otro = $this->queue->push($this->tipo('otro'), delaySeconds: 3600);
+
+        $this->assertSame(1, $this->queue->runNow($this->tipo()));
+
+        $this->assertSame($este, (int) $this->reclamar()['id']);
+        $this->assertNull($this->queue->claim('w', [$this->tipo('otro')]), 'No le tocaba al otro');
+    }
+
     private function reclamar(string $worker = 'w'): ?array
     {
         return $this->queue->claim($worker, [
