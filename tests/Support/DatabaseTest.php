@@ -81,7 +81,14 @@ final class DatabaseTest extends TestCase
 
     public function test_usa_consultas_preparadas_nativas(): void
     {
-        $this->assertFalse($this->pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES));
+        // El atributo cambia de tipo entre versiones de PHP: 8.3 devuelve
+        // int(0) y 8.4 bool(false). Comparar en estricto pasa en local y falla
+        // en producción, así que se comprueba el COMPORTAMIENTO.
+        $this->assertFalse((bool) $this->pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES));
+
+        // Con emulación activa esto se aceptaría; con preparación nativa, no.
+        $this->expectException(\PDOException::class);
+        $this->pdo->prepare('SELECT 1; SELECT 2')->execute();
     }
 
     public function test_los_enteros_vuelven_como_enteros(): void

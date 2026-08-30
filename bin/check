@@ -146,7 +146,9 @@ if ($pdo !== null) {
     $dbNow  = (int) $pdo->query('SELECT UNIX_TIMESTAMP()')?->fetchColumn();
     check('reloj de la BD alineado con UTC', abs($dbNow - time()) <= 2, gmdate('H:i:s', $dbNow) . ' UTC');
 
-    check('consultas preparadas nativas', $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES) === false);
+    // Ojo con el tipo: PHP 8.3 devuelve int(0) y 8.4 devuelve bool(false).
+    // Un === false aquí pasa en local y falla en producción.
+    check('consultas preparadas nativas', ! $pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES));
 
     // Con prepares nativas, una columna entera vuelve como int y no como cadena.
     // (Un placeholder suelto `SELECT ?` no sirve para comprobarlo: PDO lo envía
