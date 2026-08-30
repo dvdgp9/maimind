@@ -33,6 +33,52 @@ final class Request
     ) {
     }
 
+    /**
+     * La petición de un trozo de fichero, si la trae.
+     *
+     * Los reproductores de audio piden por trozos —y Safari **exige** poder
+     * hacerlo antes de dejar mover la barra—, así que sin esto una grabación
+     * de diez minutos se reproduce pero no se puede saltar a un punto.
+     *
+     * Solo se admite la forma simple `bytes=inicio-fin`. Los rangos múltiples
+     * existen en la norma y no los usa ningún reproductor.
+     *
+     * @return array{0:int,1:int}|null  inicio y fin, ambos inclusive
+     */
+    public function byteRange(int $fileSize): ?array
+    {
+        $cabecera = $this->header('range');
+
+        if ($cabecera === null || $fileSize <= 0) {
+            return null;
+        }
+
+        if (preg_match('/^bytes=(\d*)-(\d*)$/', trim($cabecera), $m) !== 1) {
+            return null;
+        }
+
+        [, $desde, $hasta] = $m;
+
+        if ($desde === '' && $hasta === '') {
+            return null;
+        }
+
+        // `bytes=-500` son los últimos 500 bytes, no «desde el 0 hasta el 500».
+        if ($desde === '') {
+            $inicio = max(0, $fileSize - (int) $hasta);
+            $fin    = $fileSize - 1;
+        } else {
+            $inicio = (int) $desde;
+            $fin    = $hasta === '' ? $fileSize - 1 : min((int) $hasta, $fileSize - 1);
+        }
+
+        if ($inicio > $fin || $inicio >= $fileSize) {
+            return null;
+        }
+
+        return [$inicio, $fin];
+    }
+
     public static function fromGlobals(): self
     {
         $uri  = (string) ($_SERVER['REQUEST_URI'] ?? '/');

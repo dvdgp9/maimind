@@ -78,6 +78,10 @@ use MaiMind\Support\Format;
 <section class="panel">
     <h2><?= e(t('capture.last_entry')) ?></h2>
 
+    <?php if ($latest !== null): ?>
+        <p class="panel__aside"><a class="link" href="/grabaciones"><?= e(t('list.see_all')) ?></a></p>
+    <?php endif; ?>
+
     <?php if ($latest === null): ?>
         <p class="empty">
             <?= icon('calendar', 22) ?>

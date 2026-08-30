@@ -316,6 +316,16 @@ final class Kernel
             ]));
         });
 
+        $r->get('/grabaciones', function (Request $request, ?User $user): Response {
+            $entries = $this->entriesFor($user);
+
+            return Response::html(View::render('grabaciones', [
+                'user'     => $user,
+                'entradas' => $entries->timeline(),
+                'total'    => $entries->countAll(),
+            ]));
+        });
+
         // --------------------------------------------------- una grabación
 
         $r->get('/entrada/{uid}', function (Request $request, ?User $user): Response {
@@ -337,6 +347,42 @@ final class Kernel
                 'transcripcion' => $this->transcriptsFor($user)->currentFor((int) $entrada['id']),
                 'guardado'      => isset($request->query['guardado']),
             ]));
+        });
+
+        // El audio de una grabación. Sin poder escucharlo, corregir una
+        // transcripción es hacer memoria a ciegas.
+        $r->get('/entrada/{uid}/audio', function (Request $request, ?User $user): Response {
+            $entrada = $this->entriesFor($user)->forTranscription(
+                (string) $request->attribute('uid')
+            );
+
+            // Purgada, nunca guardada, o de otra persona: lo mismo, 404.
+            if ($entrada === null
+                || $entrada['audio_state'] !== 'present'
+                || $entrada['audio_path'] === null) {
+                return Response::json(['error' => t('errors.not_found')], 404);
+            }
+
+            $store = new AudioStore(Config::basePath((string) config('app.paths.storage')));
+            $ruta  = $store->absolutePath((string) $entrada['audio_path']);
+
+            if (! is_file($ruta)) {
+                // La fila dice que está y no está. Vale la pena saberlo.
+                $this->logger->warning('Audio ausente en disco', [
+                    'user_id' => $user->id, 'entry' => $entrada['uid'],
+                ]);
+
+                return Response::json(['error' => t('errors.not_found')], 404);
+            }
+
+            $rango = $request->byteRange((int) filesize($ruta));
+
+            return Response::file(
+                $ruta,
+                (string) ($entrada['audio_mime'] ?: 'application/octet-stream'),
+                $rango,
+                $rango === null ? 200 : 206,
+            );
         });
 
         $r->post('/entrada/{uid}/transcripcion', function (Request $request, ?User $user): Response {

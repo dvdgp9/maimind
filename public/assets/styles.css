@@ -367,6 +367,61 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
     color: var(--ink-soft);
 }
 
+/* ------------------------------------------- listado de grabaciones */
+
+.day { margin-bottom: 1.75rem; }
+
+/* La pantalla de captura va centrada a propósito; un listado, no: la vista
+   necesita un borde por el que bajar. */
+.day, .day__title, .list__item { text-align: left; }
+
+.day:first-of-type { margin-top: 1.5rem; }
+
+.day__title {
+    margin: 0 0 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+}
+
+/* La fila entera es el enlace: en un móvil, un objetivo pequeño se falla. */
+.list__item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    width: 100%;
+    color: inherit;
+    text-decoration: none;
+}
+
+.list__time {
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+}
+
+.list__what { flex: 1; }
+
+/* El toque de ánimo, sin color y sin escala: es un número que puso una
+   persona, no una nota. Colorearlo sería juzgarlo. */
+.list__mood {
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+}
+
+.panel__aside { margin: -0.35rem 0 0.75rem; }
+
+.audio {
+    width: 100%;
+    margin-bottom: 0.6rem;
+}
+
+.gap__list button.link {
+    font-variant-numeric: tabular-nums;
+    text-decoration: underline;
+}
+
 /* -------------------------------------------------- una grabación */
 
 .notice {

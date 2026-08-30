@@ -58,26 +58,28 @@ final class Format
         string $capturedAt,
         string $timezone,
         string $locale = 'es',
+        /** En un listado agrupado por día, la hora va en cada fila, no en el día. */
+        bool $withTime = true,
     ): string {
         $hoy   = self::todayIn($timezone);
         $ayer  = (new DateTimeImmutable($hoy, new DateTimeZone($timezone)))
             ->modify('-1 day')->format('Y-m-d');
 
-        $hora = self::time($capturedAt, $timezone, $locale);
+        $sufijo = $withTime ? ', ' . self::time($capturedAt, $timezone, $locale) : '';
 
         if ($localDate === $hoy) {
-            return t('capture.today') . ', ' . $hora;
+            return t('capture.today') . $sufijo;
         }
 
         if ($localDate === $ayer) {
-            return t('capture.yesterday') . ', ' . $hora;
+            return t('capture.yesterday') . $sufijo;
         }
 
         $formatter = new IntlDateFormatter($locale, IntlDateFormatter::NONE, IntlDateFormatter::NONE, $timezone);
         $formatter->setPattern($locale === 'es' ? "d 'de' MMMM" : 'd MMMM');
 
         return $formatter->format(new DateTimeImmutable($localDate, new DateTimeZone($timezone)))
-            . ', ' . $hora;
+            . $sufijo;
     }
 
     /**

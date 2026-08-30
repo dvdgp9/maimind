@@ -12,6 +12,13 @@ final class Response
     /** @var list<array{name:string,value:string,options:array<string,mixed>}> */
     private array $cookies = [];
 
+    /**
+     * Un fichero que se manda desde disco en vez de desde memoria.
+     *
+     * @var array{path:string,offset:int,length:int}|null
+     */
+    private ?array $file = null;
+
     public function __construct(
         public readonly int $status = 200,
         public readonly string $body = '',
@@ -31,6 +38,54 @@ final class Response
         return (new self($status, $body))->withHeader('Content-Type', 'application/json; charset=utf-8');
     }
 
+    /**
+     * Manda un fichero del disco sin cargarlo entero en memoria.
+     *
+     * Importa: una grabación puede pesar 25 MB y el servidor tiene 3,7 GB
+     * compartidos con el correo y otra aplicación. Leer el fichero a una
+     * cadena para escupirlo es gratis con un usuario y un problema con diez.
+     *
+     * @param  array{0:int,1:int}|null  $range  byte inicial y final, inclusive
+     */
+    public static function file(
+        string $path,
+        string $contentType,
+        ?array $range = null,
+        int $status = 200,
+    ): self {
+        $tamano = (int) filesize($path);
+
+        [$desde, $hasta] = $range ?? [0, $tamano - 1];
+
+        $respuesta = (new self($status))
+            ->withHeader('Content-Type', $contentType)
+            ->withHeader('Content-Length', (string) ($hasta - $desde + 1))
+            // Sin esto, algunos navegadores no dejan mover la barra de
+            // reproducción: piden un trozo, no se les da, y se rinden.
+            ->withHeader('Accept-Ranges', 'bytes')
+            // El audio es de una persona concreta: ni cachés compartidas ni
+            // intermediarios guardándolo.
+            ->withHeader('Cache-Control', 'private, no-store')
+            ->withHeader('X-Content-Type-Options', 'nosniff');
+
+        if ($range !== null) {
+            $respuesta = $respuesta->withHeader(
+                'Content-Range',
+                sprintf('bytes %d-%d/%d', $desde, $hasta, $tamano),
+            );
+        }
+
+        $respuesta->file = ['path' => $path, 'offset' => $desde, 'length' => $hasta - $desde + 1];
+
+        return $respuesta;
+    }
+
+    /** @return array{path:string,offset:int,length:int}|null */
+    public function fileInfo(): ?array
+    {
+        return $this->file;
+    }
+
     public static function redirect(string $to, int $status = 302): self
     {
         return (new self($status))->withHeader('Location', $to);
@@ -38,6 +93,8 @@ final class Response
 
     public function withHeader(string $name, string $value): self
     {
+        // clone copia $file también, que es lo que hace que file() pueda
+        // encadenar cabeceras sin perder el fichero por el camino.
         $clone = clone $this;
         $clone->headers[$name] = $value;
 
@@ -100,6 +157,32 @@ final class Response
 
         foreach ($this->cookies as $cookie) {
             setcookie($cookie['name'], $cookie['value'], $cookie['options']);
+        }
+
+        if ($this->file !== null) {
+            $manejador = fopen($this->file['path'], 'rb');
+
+            if ($manejador !== false) {
+                fseek($manejador, $this->file['offset']);
+                // A trozos, no de golpe: es lo que evita tener 25 MB en
+                // memoria por cada persona que le da al play.
+                $restante = $this->file['length'];
+
+                while ($restante > 0 && ! feof($manejador)) {
+                    $trozo = fread($manejador, (int) min(262144, $restante));
+
+                    if ($trozo === false) {
+                        break;
+                    }
+
+                    echo $trozo;
+                    $restante -= strlen($trozo);
+                }
+
+                fclose($manejador);
+            }
+
+            return;
         }
 
         echo $this->body;

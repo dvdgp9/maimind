@@ -197,6 +197,7 @@ profesionales. Se detallarán al llegar: diseñarlas ahora sin datos reales es a
 - [x] 2.1 Interfaz TranscriptionProvider + implementación falsa
 - [x] 2.2 Implementación OpenRouter + job transcribe + coste real
 - [x] 2.3 Vista de la transcripción y edición manual — **FASE 2 COMPLETA**
+- [x] 1.6 Listado de grabaciones y reproducción del audio — *fuera de plan, acordado*
 - [ ] 3.1 JSON Schema del contrato + validador + fixtures
 
 ---
@@ -865,6 +866,45 @@ leerlo, no después—, la corrección se guarda y la pantalla pasa a decir
 hueco señalado en 0:25–0:30 y sin forma de reproducirlo, corregir es hacer
 memoria a ciegas. Una ruta de reproducción con la sesión por delante es lo
 primero que pedirá la pantalla de revisión.
+
+**2026-08-30 — Executor, tarea 1.6 (fuera de plan, acordada con el usuario).**
+
+Antes de la fase 3 se decidió hacer la aplicación usable para poder vivir con
+ella unas semanas: la fase 3 se diseña mucho mejor contra transcripciones
+reales del usuario que contra ejemplos inventados, y **seguimos necesitando voz
+real con muletillas** para cerrar qué modelo ASR usar.
+
+Había dos agujeros que ni la 3 ni la 4 tocaban:
+
+- **No se podían ver las grabaciones pasadas.** `recent()` existía pero solo lo
+  usaba la API JSON: con tres grabaciones ya no se llegaba a la primera.
+- **No se podía escuchar el audio.** La pantalla señalaba un hueco en 0:25–0:30
+  y pedía escribir lo que faltaba, de memoria y a ciegas.
+
+Hecho:
+
+- `/grabaciones`, agrupadas por **día local** —quien graba a la una de la
+  madrugada lo hace en el día que está viviendo—, con la hora, las palabras y
+  el toque de ánimo. Sin rachas, sin días seguidos y sin celebrar nada; hay un
+  test que falla si alguien mete ese vocabulario.
+- `/entrada/{uid}/audio`, con **peticiones por rango**: sin ellas algunos
+  navegadores reproducen pero no dejan mover la barra. Se manda **desde disco a
+  trozos de 256 KB**, no cargando el fichero en memoria: 25 MB por reproducción
+  en una máquina de 3,7 GB compartidos es un problema con diez personas.
+- El audio va **antes** de la transcripción en la pantalla: la grabación es el
+  original y el texto es una interpretación suya, por buena que sea.
+- **Los huecos son pinchables**: tocar «0:25 – 0:30» salta ahí y reproduce,
+  arrancando 1,5 s antes porque el corte casi nunca cae en un silencio limpio y
+  las palabras de antes ayudan a situarse.
+
+**316 tests de PHP (1699 aserciones) y 11 de JavaScript, en verde.** Verificado
+en navegador a 390 px, claro y oscuro: la duración se lee (40,4 s, o sea que
+los rangos funcionan) y pinchar el hueco salta a 24,2 s reproduciendo.
+
+Un choque de CSS por el camino: `.list` ya existía en la hoja de estilos sin
+que ninguna vista la usara, y sus reglas pintaban los encabezados de día como
+tarjetas. Se reestructuró a un `<section>` por día, que además es mejor
+semánticamente que meter los títulos como `<li>`.
 
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue

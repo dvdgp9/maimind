@@ -41,8 +41,17 @@ return [
         'yesterday'     => 'yesterday',
     ],
 
+    'list' => [
+        'title'          => 'Your recordings',
+        'count'          => ':count in total',
+        'back_to_record' => 'Record',
+        'see_all'        => 'See all',
+    ],
+
     'entry' => [
         'back'            => 'Back',
+        'audio'           => 'The recording',
+        'audio_expires'   => 'Deleted :days days after recording.',
         'transcript'      => 'What you said',
         'edit_hint'       => 'If the transcriber got it wrong, fix it here.',
         'save'            => 'Save correction',

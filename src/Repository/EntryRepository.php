@@ -47,6 +47,35 @@ final class EntryRepository extends UserScopedRepository
         );
     }
 
+    /**
+     * El listado, con lo poco que hace falta para decidir cuál abrir.
+     *
+     * Trae el número de palabras de la transcripción vigente para que la lista
+     * distinga de un vistazo una grabación de veinte segundos de una de cinco
+     * minutos. Es un JOIN y no una consulta por fila: con doscientas entradas,
+     * doscientas consultas se notan.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function timeline(int $limit = 100): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT e.uid, e.captured_at, e.local_date, e.client_timezone,
+                    e.mood_hint, e.pipeline_state, e.audio_state, e.audio_duration_ms,
+                    t.word_count, t.provider AS transcript_provider
+               FROM entries e
+               LEFT JOIN transcripts t
+                      ON t.entry_id = e.id AND t.is_current = 1 AND t.user_id = e.user_id
+              WHERE e.user_id = ? AND e.deleted_at IS NULL
+              ORDER BY e.captured_at DESC
+              LIMIT ' . max(1, $limit)
+        );
+
+        $stmt->execute([$this->userId]);
+
+        return $stmt->fetchAll();
+    }
+
     public function countAll(): int
     {
         return $this->countWhere();

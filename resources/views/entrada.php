@@ -28,6 +28,8 @@ $estado = (string) $entrada['pipeline_state'];
 // es insistir sobre algo que ya se ha atendido, y eso lo prohíbe el §3 del
 // documento de tono. El dato se conserva igual en la fila; lo que deja de
 // hacerse es dar la matraca con él.
+$hayAudio = $entrada['audio_state'] === 'present';
+
 $huecos = $transcripcion === null || TranscriptRepository::isManual($transcripcion)
     ? []
     : (json_decode((string) ($transcripcion['coverage_gaps'] ?? '[]'), true) ?: []);
@@ -44,6 +46,19 @@ $huecos = $transcripcion === null || TranscriptRepository::isManual($transcripci
 
 <?php if ($guardado): ?>
     <p class="notice" role="status"><?= e(t('entry.saved')) ?></p>
+<?php endif; ?>
+
+<?php if ($hayAudio): ?>
+    <?php /* Antes de la transcripción: la grabación es el original y el texto
+             es una interpretación suya, por buena que sea. */ ?>
+    <section class="panel">
+        <h2><?= e(t('entry.audio')) ?></h2>
+        <audio class="audio" controls preload="metadata" data-audio
+               src="/entrada/<?= e((string) $entrada['uid']) ?>/audio"></audio>
+        <p class="muted"><?= e(t('entry.audio_expires', [
+            'days' => (int) config('services.audio.retention_days'),
+        ])) ?></p>
+    </section>
 <?php endif; ?>
 
 <section class="panel">
@@ -80,7 +95,15 @@ $huecos = $transcripcion === null || TranscriptRepository::isManual($transcripci
                 <p class="gap__body"><?= e(t('entry.gap_explain')) ?></p>
                 <ul class="gap__list">
                     <?php foreach ($huecos as $hueco): ?>
-                        <li><?= e(Format::clock((int) $hueco['start_ms'])) ?> – <?= e(Format::clock((int) $hueco['end_ms'])) ?></li>
+                        <li>
+                            <?php if ($hayAudio): ?>
+                                <button type="button" class="link" data-seek="<?= (int) $hueco['start_ms'] / 1000 ?>">
+                                    <?= e(Format::clock((int) $hueco['start_ms'])) ?> – <?= e(Format::clock((int) $hueco['end_ms'])) ?>
+                                </button>
+                            <?php else: ?>
+                                <?= e(Format::clock((int) $hueco['start_ms'])) ?> – <?= e(Format::clock((int) $hueco['end_ms'])) ?>
+                            <?php endif; ?>
+                        </li>
                     <?php endforeach; ?>
                 </ul>
             </div>
@@ -107,4 +130,6 @@ $huecos = $transcripcion === null || TranscriptRepository::isManual($transcripci
     <?php endif; ?>
 </section>
 
-<p><a class="link" href="/"><?= icon('caret-left', 15) ?><?= e(t('entry.back')) ?></a></p>
+<p><a class="link" href="/grabaciones"><?= icon('caret-left', 15) ?><?= e(t('entry.back')) ?></a></p>
+
+<script type="module" src="/assets/entrada.js"></script>

@@ -37,8 +37,17 @@ return [
         'yesterday'     => 'ayer',
     ],
 
+    'list' => [
+        'title'          => 'Tus grabaciones',
+        'count'          => ':count en total',
+        'back_to_record' => 'Grabar',
+        'see_all'        => 'Ver todas',
+    ],
+
     'entry' => [
         'back'            => 'Volver',
+        'audio'           => 'La grabación',
+        'audio_expires'   => 'Se borra a los :days días de grabarla.',
         'transcript'      => 'Lo que dijiste',
         'edit_hint'       => 'Si el transcriptor se ha equivocado, corrígelo aquí.',
         'save'            => 'Guardar corrección',
