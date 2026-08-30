@@ -112,16 +112,16 @@ manejador del worker, con sus reintentos y su registro— en vez de dos que se
 van separando con el tiempo. Lanzarlo dos veces el mismo día no encola nada la
 segunda vez.
 
-## Service worker: la trampa de la versión
+## Service worker: no hay nada que recordar
 
-`public/sw.js` empieza con `const VERSION = 'v1'`. Ese número es lo único que
-invalida la caché del navegador.
+`resources/sw.js` **no es un fichero estático**: lo sirve PHP desde `/sw.js`
+sustituyendo `__VERSION__` por una huella del contenido de todo lo que ese
+worker cachea (`src/Support/AssetVersion.php`).
 
-**Al tocar cualquier fichero de `public/assets/` hay que subirlo.** Si no, los
-teléfonos que ya tienen la aplicación instalada seguirán sirviéndose el CSS y el
-JavaScript viejos desde su propia caché, indefinidamente, y desde el servidor no
-se ve nada raro: el despliegue habrá ido bien y la gente estará usando la
-versión anterior.
+Es decir: tocar cualquier cosa de `public/assets/` invalida sola la caché de los
+móviles ya instalados. No hay número que subir a mano. Y como la huella es del
+contenido y no de la fecha, dos despliegues del mismo código no tiran la caché
+de nadie.
 
 Los iconos van versionados en `public/icons/`, así que el despliegue no tiene
 que generarlos. Si cambia la paleta:
@@ -141,8 +141,18 @@ Los del service worker corren con Node (`node --test`) porque PHPUnit no puede
 ejecutar JavaScript, y lo que decide ese fichero —qué cachea y qué borra al
 cerrar sesión— no se puede comprobar buscando cadenas.
 
+## OpenRouter: la parte que hay que hacer a mano
+
+El código manda `data_collection: "deny"` y `zdr: true` en **cada** petición, y
+`bin/check` falla si esa política se afloja. Pero conviene activarlo también en
+la cuenta, que es lo que cubre cualquier petición que se escape del código:
+
+> openrouter.ai → **Settings → Privacy** → desactivar los endpoints que
+> entrenan o retienen datos.
+
+Las dos se combinan con un OR y solo pueden restringir más, así que activarlo en
+la cuenta no puede romper nada. Detalle en `docs/api/openrouter.md` §4.
+
 ## Pendiente
 
-- Nada del despliegue. Lo siguiente es la fase 2 (transcripción), que necesita
-  **D10 resuelto antes**: configurar la política de datos de OpenRouter para que
-  solo entren proveedores que no entrenan con lo que se les manda.
+- Nada del despliegue. Lo siguiente es la fase 2 (transcripción).

@@ -14,11 +14,19 @@
  *               de la sesión, y por eso vive aparte: para poder borrarlo sin
  *               llevarse por delante lo demás.
  *
- * El número de versión invalida la caché entera. Cambiarlo al tocar cualquier
- * fichero de public/assets es obligatorio; si no, se sirve el viejo.
+ * **La versión no se escribe a mano.** `__VERSION__` lo sustituye el servidor
+ * por un hash del contenido de todo lo que este fichero cachea (ver
+ * AssetVersion). Por eso este fichero vive en resources/ y no en public/: se
+ * sirve desde la ruta /sw.js, no como fichero estático.
+ *
+ * Antes era un `'v1'` escrito a mano con un comentario que decía «acuérdate de
+ * subirlo». Un despliegue con el número sin tocar dejaba a los teléfonos ya
+ * instalados sirviéndose el CSS y el JavaScript viejos de su propia caché,
+ * indefinidamente, y desde el servidor no se veía nada raro. Un comentario no
+ * es un mecanismo.
  */
 
-const VERSION   = 'v1';
+const VERSION   = '__VERSION__';
 const ESTATICOS = `maimind-estaticos-${VERSION}`;
 const PAGINAS   = `maimind-paginas-${VERSION}`;
 

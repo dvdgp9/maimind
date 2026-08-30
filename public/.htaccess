@@ -20,14 +20,9 @@ Options -Indexes -MultiViews
     AddType application/manifest+json .webmanifest
 </IfModule>
 
-# El service worker no se cachea. Si se cacheara, una versión nueva podría
-# tardar hasta un día en llegar al teléfono de alguien, y con ella todos los
-# assets que ese worker decide servir desde su propia caché.
-<Files "sw.js">
-    <IfModule mod_headers.c>
-        Header set Cache-Control "no-cache, max-age=0"
-    </IfModule>
-</Files>
+# El service worker NO es un fichero estático: lo sirve PHP desde /sw.js para
+# inyectarle la versión de la caché, y de ahí salen también sus cabeceras.
+# Ver src/Support/AssetVersion.php.
 
 # Los ficheros ocultos no se sirven nunca.
 <FilesMatch "^\.">

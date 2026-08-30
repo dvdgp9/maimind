@@ -9,6 +9,17 @@ return [
         'api_key'  => (string) env('OPENROUTER_API_KEY', ''),
         'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
 
+        // Decisión D10. NO se lee de una variable de entorno a propósito: no es
+        // un ajuste, es una política, y un .env mal copiado no puede ser la
+        // razón de que una grabación acabe en el conjunto de entrenamiento de
+        // alguien. Ver src/Providers/OpenRouter/DataPolicy.php.
+        'privacy' => [
+            // El proveedor no entrena con lo que se le manda.
+            'data_collection' => 'deny',
+            // Y tampoco lo conserva. Son dos cosas distintas.
+            'zdr' => true,
+        ],
+
         'transcription' => [
             // ASR real y verbatim. Nunca un LLM multimodal: parafrasea el habla y
             // rompe el anclaje de evidencia (citas literales con offsets).

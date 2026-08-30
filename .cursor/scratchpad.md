@@ -193,7 +193,7 @@ profesionales. Se detallarán al llegar: diseñarlas ahora sin datos reales es a
 - [x] 1.3 Cola de trabajos y worker
 - [x] 1.4 Modo offline del cliente
 - [x] 1.5 PWA instalable — **FASE 1 COMPLETA**
-- [ ] D10 Política de datos de OpenRouter — *bloquea la fase 2*
+- [x] D10 Política de datos de OpenRouter — *falta activarlo en la cuenta (usuario)*
 - [ ] 2.1 Interfaz TranscriptionProvider + implementación falsa
 
 ---
@@ -577,6 +577,51 @@ caché. Tocar `public/assets/` sin subirlo deja a los teléfonos instalados con 
 CSS y el JS viejos indefinidamente, y desde el servidor no se ve nada raro.
 Anotado en `docs/despliegue.md`.
 
+**2026-08-30 — Executor. Versión automática del service worker y D10.**
+
+**La trampa del `VERSION`, cerrada.** Era un `'v1'` a mano en `sw.js` con un
+comentario que decía «acuérdate de subirlo». No se arregló como se había
+propuesto —calculándolo en `bin/deploy`—, porque eso obliga a reescribir un
+fichero versionado en el servidor y el siguiente `git pull --ff-only` se
+rompería. En su lugar, `sw.js` se ha movido a `resources/` y lo sirve PHP desde
+la ruta `/sw.js`, sustituyendo `__VERSION__` por una huella del contenido
+(`AssetVersion`). Ventajas sobre la idea original: funciona también en
+desarrollo, no toca el árbol de trabajo, y las cabeceras salen de PHP en vez de
+`.htaccess`.
+
+La huella es del **contenido**, no de la fecha: dos despliegues del mismo código
+dan la misma y no tiran la caché de nadie sin motivo. Incluye las vistas y los
+idiomas porque `/sin-conexion` se precachea ya renderizada. Verificado a mano:
+tocar `styles.css` cambió la huella y revertirlo la devolvió.
+
+**D10 resuelta, y no era lo que decía la nota.** Al verificar la API de
+OpenRouter apareció que no es un control sino **dos, independientes**:
+
+- `data_collection: "deny"` — el proveedor no entrena con lo que se le manda.
+- `zdr: true` — el proveedor no lo conserva.
+
+Un proveedor puede cumplir el primero y guardar registros treinta días. Pedir
+solo lo que decía D10 habría dejado copias de las grabaciones fuera de nuestro
+control. Para material del art. 9 del RGPD hacen falta los dos.
+
+Se mandan **en cada petición** además de configurarse en la cuenta: las dos se
+combinan con un OR y la petición solo puede restringir más, así que mandarlo
+siempre no puede empeorar nada y protege de que alguien toque el panel de
+OpenRouter sin que el código se entere. Todo en
+`src/Providers/OpenRouter/DataPolicy.php`, único sitio que construye ese bloque
+—si cada proveedor lo copiara, uno se lo dejaría—, con la política en
+`config/services.php` y **sin variable de entorno**: un `.env` mal copiado no
+puede ser la razón de que una grabación acabe en un conjunto de entrenamiento.
+Cierra hacia el lado seguro: si la configuración se afloja, revienta y no sale
+nada. `bin/check` lo comprueba.
+
+**215 tests de PHP (1399 aserciones) y 11 de JavaScript, en verde.**
+
+⚠️ **Queda una acción manual del usuario**: activar la restricción también en la
+cuenta de OpenRouter (Settings → Privacy). El código no puede hacerlo.
+
+Documentado en `docs/api/openrouter.md` §4, con la fuente y la fecha.
+
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue
 - D10 política de datos de OpenRouter → **antes de enviar la primera transcripción real**
@@ -656,6 +701,15 @@ y añadir la entrada de cron. Instrucciones en `docs/despliegue.md`.
 - Se pueden combinar `time_zone`, `sql_mode` y `collation_connection` en un solo `SET`, que
   es lo que permite meterlos todos en `MYSQL_ATTR_INIT_COMMAND` (solo admite una sentencia)
   y que se reapliquen al reconectar.
+- **Un comentario que dice «acuérdate» no es un mecanismo.** El `VERSION` del
+  service worker era un número a mano; olvidarlo dejaba a los móviles ya
+  instalados con el CSS viejo indefinidamente, sin señal ninguna en el servidor.
+  Lo que lo arregla no es un recordatorio mejor, es calcularlo.
+- **Verificar la API antes de implementarla encontró que la decisión estaba mal
+  planteada.** D10 llevaba desde el 16 de agosto escrita como «enrutar solo a
+  proveedores que no entrenan». Son dos controles independientes, y el que
+  faltaba —`zdr`— es el que impide que guarden copias. Haberlo implementado
+  según la nota habría dado una falsa sensación de haberlo resuelto.
 - **Un test que solo busca cadenas en un fichero da falsa tranquilidad.** Los
   primeros tests del service worker comprobaban que `sw.js` contuviera
   `startsWith('/api/')`. La cadena puede seguir ahí y la lógica estar mal, y de

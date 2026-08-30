@@ -12,6 +12,9 @@ import assert from 'node:assert/strict';
 
 import { cargarWorker, peticion } from './entorno.mjs';
 
+// La versión la inyecta PHP al servir el fichero; aquí llega sin sustituir.
+const VERSION = '__VERSION__';
+
 const navegacion = (url) => peticion(url, { modo: 'navigate' });
 
 test('al instalarse precarga la concha, la página sin conexión incluida', async () => {
@@ -34,15 +37,15 @@ test('al instalarse precarga la concha, la página sin conexión incluida', asyn
 test('al activarse borra las cachés de versiones anteriores y solo esas', async () => {
     const w = cargarWorker();
 
-    await w.caches.open('maimind-estaticos-v0');
-    await w.caches.open('maimind-paginas-v0');
-    await w.caches.open('maimind-estaticos-v1');
+    await w.caches.open('maimind-estaticos-viejo');
+    await w.caches.open('maimind-paginas-viejo');
+    await w.caches.open(`maimind-estaticos-${VERSION}`);
     // De otra aplicación en el mismo origen. Ni tocarla.
-    await w.caches.open('otra-cosa-v0');
+    await w.caches.open('otra-cosa-viejo');
 
     await w.disparar('activate', w.eventoCiclo());
 
-    assert.deepEqual(w.borrados.sort(), ['maimind-estaticos-v0', 'maimind-paginas-v0']);
+    assert.deepEqual(w.borrados.sort(), ['maimind-estaticos-viejo', 'maimind-paginas-viejo']);
 });
 
 test('una respuesta de la API nunca se cachea', async () => {
@@ -107,7 +110,7 @@ test('una página se pide a la red primero y se guarda para cuando no la haya', 
 test('sin red, una página ya vista se sirve de la caché', async () => {
     const w = cargarWorker(async () => { throw new Error('sin red'); });
 
-    const paginas = await w.caches.open('maimind-paginas-v1');
+    const paginas = await w.caches.open(`maimind-paginas-${VERSION}`);
     await paginas.put(navegacion('https://maimind.test/'), { guardada: true });
 
     const evento = await w.disparar('fetch', w.eventoFetch(navegacion('https://maimind.test/')));

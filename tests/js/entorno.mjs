@@ -9,12 +9,17 @@
  *
  * Se carga con node:vm y no importándolo, porque un service worker es un
  * script clásico que se apoya en `self`, no un módulo.
+ *
+ * Se lee de resources/ y no de public/: el fichero no se sirve estático, lo
+ * sirve PHP tras sustituirle la versión. Aquí `__VERSION__` se queda tal cual,
+ * que para estas pruebas da igual — lo único que importa es que sea la misma
+ * cadena en los nombres de los dos almacenes.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
-const RUTA = fileURLToPath(new URL('../../public/sw.js', import.meta.url));
+const RUTA = fileURLToPath(new URL('../../resources/sw.js', import.meta.url));
 
 /** Caché en memoria con la parte de la API de CacheStorage que sw.js usa. */
 class CacheFalsa {

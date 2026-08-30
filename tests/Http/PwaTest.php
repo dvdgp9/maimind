@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MaiMind\Tests\Http;
 
+use MaiMind\Support\AssetVersion;
 use MaiMind\Support\Config;
 use MaiMind\Tests\AppTestCase;
 
@@ -83,7 +84,7 @@ final class PwaTest extends AppTestCase
 
     public function test_todo_lo_que_el_service_worker_precarga_existe(): void
     {
-        $sw = (string) file_get_contents(Config::basePath('public/sw.js'));
+        $sw = (string) file_get_contents(Config::basePath('resources/sw.js'));
 
         preg_match('/const CONCHA = \[(.*?)\];/s', $sw, $bloque);
 
@@ -142,15 +143,6 @@ final class PwaTest extends AppTestCase
         $this->assertStringContainsString('prefers-color-scheme: dark', $html);
     }
 
-    public function test_el_service_worker_no_se_queda_cacheado(): void
-    {
-        // Si Apache lo cachea, una versión nueva puede tardar un día en llegar,
-        // y con ella todo lo que ese worker sirve desde su propia caché.
-        $htaccess = (string) file_get_contents(Config::basePath('public/.htaccess'));
-
-        $this->assertStringContainsString('sw.js', $htaccess);
-        $this->assertStringContainsString('no-cache', $htaccess);
-    }
 
 
 
@@ -159,11 +151,70 @@ final class PwaTest extends AppTestCase
         // Descartadas hasta tener datos reales delante: un recordatorio diario
         // roza la gamificación que prohíbe 06-diseno-y-tono.md §3, y cambia la
         // naturaleza del registro. Ver §6 del mismo documento.
-        foreach (['sw.js', 'assets/pwa.js', 'assets/capture.js'] as $fichero) {
-            $codigo = (string) file_get_contents(Config::basePath('public/' . $fichero));
+        foreach (['resources/sw.js', 'public/assets/pwa.js', 'public/assets/capture.js'] as $fichero) {
+            $codigo = (string) file_get_contents(Config::basePath($fichero));
 
             $this->assertStringNotContainsString('Notification', $codigo, $fichero);
             $this->assertStringNotContainsString('pushManager', $codigo, $fichero);
         }
     }
+
+    // ------------------------------------------- versión de la caché
+
+    public function test_el_service_worker_se_sirve_con_su_version_puesta(): void
+    {
+        $respuesta = $this->get('/sw.js');
+
+        $this->assertSame(200, $respuesta->status);
+        $this->assertStringContainsString('javascript', (string) $respuesta->header('Content-Type'));
+
+        // Si se cacheara, una versión nueva podría tardar un día en llegar.
+        $this->assertStringContainsString('no-cache', (string) $respuesta->header('Cache-Control'));
+
+        $this->assertStringNotContainsString(
+            '__VERSION__',
+            $respuesta->body,
+            'El marcador se sirvió sin sustituir: la caché no se invalidaría nunca',
+        );
+
+        $this->assertStringContainsString(
+            "const VERSION   = '" . AssetVersion::current() . "'",
+            $respuesta->body,
+        );
+    }
+
+    public function test_la_version_cambia_al_tocar_un_asset(): void
+    {
+        // Es el mecanismo entero. Antes esto era un número escrito a mano, y
+        // olvidarse de subirlo dejaba a los móviles ya instalados con el CSS
+        // viejo para siempre sin que en el servidor se viera nada raro.
+        $antes = AssetVersion::current();
+
+        $intruso = Config::basePath('public/assets/_prueba-de-version.js');
+
+        file_put_contents($intruso, '// solo para este test');
+
+        try {
+            AssetVersion::forget();
+
+            $this->assertNotSame($antes, AssetVersion::current(), 'La huella no se enteró del cambio');
+        } finally {
+            unlink($intruso);
+            AssetVersion::forget();
+        }
+
+        $this->assertSame($antes, AssetVersion::current(), 'La huella no volvió a ser la misma');
+    }
+
+    public function test_la_version_no_cambia_sin_motivo(): void
+    {
+        // Dos despliegues del mismo código tienen que dar la misma huella: si
+        // no, cada despliegue tiraría la caché de todo el mundo.
+        $primera = AssetVersion::current();
+
+        AssetVersion::forget();
+
+        $this->assertSame($primera, AssetVersion::current());
+    }
+
 }

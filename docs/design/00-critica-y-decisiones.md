@@ -264,7 +264,7 @@ reprocesar comparando versiones del prompt.
 | D7 | Motor de BD | MariaDB 11.4 (es lo que hay en producción) |
 | D8 | Dominio | Subdominio de `iaiapro.com` para empezar; dominio propio más adelante |
 | D5 | Idioma | Producto en español. Slugs y enums en inglés porque son identificadores, no texto. Andamiaje i18n mínimo desde la tarea 0.1: coste ~2-3 h ahora frente a días de retrofit. Ver `04-arquitectura.md` §4.bis |
-| D10 | Política de datos OpenRouter | Enrutar solo a proveedores que no entrenan. Configurar antes de la primera transcripción real |
+| D10 | Política de datos OpenRouter | **Resuelta el 2026-08-30.** Son dos controles, no uno: `data_collection: "deny"` (no entrenan) **y** `zdr: true` (no conservan). Se mandan en cada petición además de configurarse en la cuenta. Ver `docs/api/openrouter.md` §4 |
 
 ### Abiertas
 
@@ -279,8 +279,15 @@ reprocesar comparando versiones del prompt.
    un worker permanente y una base de datos. Hay que decidir si convive ahí o acaba en su
    propia máquina; para el prototipo convive, con la concurrencia del worker limitada a 1.
 
-10. **Política de datos en OpenRouter.** Restringir el enrutado a proveedores que no entrenan
-    con los datos enviados. Debe configurarse **antes** de enviar la primera transcripción real.
+10. ~~**Política de datos en OpenRouter.**~~ **Cerrada el 2026-08-30.** Al verificar la API
+    apareció que no era un control sino dos, independientes: `data_collection: "deny"` impide
+    que el proveedor entrene con los datos, y `zdr: true` impide que los conserve. Un proveedor
+    puede cumplir el primero y guardar registros treinta días. Pedir solo lo que decía esta
+    nota habría dejado copias de las grabaciones fuera de nuestro control.
+
+    Implementado en `src/Providers/OpenRouter/DataPolicy.php`, que es el único sitio que
+    construye ese bloque, y comprobado por `bin/check`. Queda **una acción manual del
+    usuario**: activarlo también en la cuenta de OpenRouter (Settings → Privacy).
 
 ---
 

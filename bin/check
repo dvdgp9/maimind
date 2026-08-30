@@ -214,6 +214,16 @@ if ($pdo !== null) {
     }
 }
 
+// --- Política de datos (D10) -------------------------------------------
+// Comprobación y no aviso: mandar la voz de alguien contando cómo está a un
+// proveedor que entrena con ella no se arregla luego.
+try {
+    MaiMind\Providers\OpenRouter\DataPolicy::assertNotLoosened();
+    check('OpenRouter: sin entrenamiento ni retención', true, 'data_collection=deny · zdr=true');
+} catch (Throwable $e) {
+    check('OpenRouter: sin entrenamiento ni retención', false, $e->getMessage());
+}
+
 // --- Logger -------------------------------------------------------------
 $app['logger']->info('bin/check ejecutado', ['env' => config('app.env')]);
 $logFile = Config::basePath((string) config('app.paths.logs')) . '/app-' . gmdate('Y-m-d') . '.log';

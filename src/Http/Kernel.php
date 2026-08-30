@@ -14,6 +14,7 @@ use MaiMind\Domain\Auth\SessionManager;
 use MaiMind\Domain\User;
 use MaiMind\Repository\EntryRepository;
 use MaiMind\Repository\UserRepository;
+use MaiMind\Support\AssetVersion;
 use MaiMind\Support\Config;
 use MaiMind\Support\Lang;
 use MaiMind\Support\Ulid;
@@ -223,6 +224,21 @@ final class Kernel
             }
 
             return $this->startSessionAndRedirect($result['user'], $request);
+        }, auth: false);
+
+        // El service worker se sirve desde PHP y no como fichero estático, para
+        // poder inyectarle la versión de la caché. Ver AssetVersion.
+        $r->get('/sw.js', function (Request $request): Response {
+            $codigo = (string) file_get_contents(Config::basePath('resources/sw.js'));
+
+            return (new Response(200, str_replace('__VERSION__', AssetVersion::current(), $codigo)))
+                ->withHeader('Content-Type', 'application/javascript; charset=utf-8')
+                // Sin esto, una versión nueva del worker puede tardar hasta un
+                // día en llegar, y con ella todo lo que ese worker decide
+                // servir desde su propia caché.
+                ->withHeader('Cache-Control', 'no-cache, max-age=0')
+                // Aunque hoy se sirve desde la raíz y no haría falta.
+                ->withHeader('Service-Worker-Allowed', '/');
         }, auth: false);
 
         // La enseña el service worker cuando no hay red ni copia de la página

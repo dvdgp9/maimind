@@ -149,8 +149,72 @@ Puntos a verificar en implementación (fase 3):
 
 ---
 
+## 4. Política de datos (decisión D10)
+
+**Verificado contra la documentación de OpenRouter el 2026-08-30.**
+
+Son **dos controles independientes**, y hacen falta los dos. La nota original de
+D10 solo pedía el primero, que no basta:
+
+| Clave | Valor | Qué garantiza |
+|---|---|---|
+| `data_collection` | `"deny"` | El proveedor **no entrena** con lo que se le manda |
+| `zdr` | `true` | El proveedor **no conserva** la petición ni la respuesta |
+
+Un proveedor puede cumplir uno y no el otro: guardar registros treinta días sin
+entrenar con ellos satisface `data_collection` y viola ZDR. Para este material
+—la voz de alguien contando cómo está, categoría especial del art. 9 RGPD— hacen
+falta los dos.
+
+Van dentro del objeto `provider`, en el cuerpo de la petición:
+
+```json
+{
+  "model": "openai/whisper-1",
+  "input_audio": { "data": "…", "format": "webm" },
+  "provider": {
+    "data_collection": "deny",
+    "zdr": true
+  }
+}
+```
+
+### Cuenta y petición se combinan, no se pisan
+
+La configuración de la cuenta se hereda por defecto, y **la petición solo puede
+restringir más, nunca menos**: el parámetro por petición se combina con un OR
+con lo que tenga la cuenta. Es decir, mandarlo siempre no puede empeorar nada.
+
+Por eso en MaiMind se hacen **las dos cosas**:
+
+1. **En la cuenta de OpenRouter** (una vez, a mano): activar la restricción en
+   *Settings → Privacy*.
+2. **En cada petición**, desde `src/Providers/OpenRouter/DataPolicy.php`, que es
+   el único sitio donde se construye ese bloque. Si cada proveedor lo copiara
+   por su cuenta, uno se lo dejaría.
+
+Lo segundo protege de lo primero: que alguien toque el panel de OpenRouter no
+puede hacer que empiece a salir material sin restringir.
+
+### Cierra hacia el lado seguro
+
+`DataPolicy::assertNotLoosened()` revienta si la configuración se ha aflojado, y
+`bin/check` lo comprueba. Se prefiere que no salga una transcripción a que salga
+hacia donde no debe: un fallo se ve, y una grabación en el conjunto de
+entrenamiento de alguien no se ve y no se puede retirar.
+
+### Lo que OpenRouter conserva de todas formas
+
+ZDR cubre el contenido de peticiones y respuestas. Los **metadatos** —número de
+tokens, latencia, marcas de tiempo— se conservan igualmente. No llevan contenido,
+pero sí revelan cuándo y cuánto graba cada persona. A tener en cuenta cuando se
+aborde el RGPD (decisión 6, abierta).
+
+---
+
 ## Fuentes
 
 - https://openrouter.ai/blog/announcements/announcing-audio-apis/
 - https://openrouter.ai/blog/tutorials/transcription-on-openrouter/
 - https://openrouter.ai/collections/speech-to-text-models
+- Provider routing (`data_collection`, `zdr`, herencia de la cuenta) — https://openrouter.ai/docs/features/provider-routing · consultado el 2026-08-30
