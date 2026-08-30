@@ -362,4 +362,119 @@ final class CapturaTest extends AppTestCase
 
         $this->assertSame(0, (int) $stmt->fetchColumn());
     }
+
+    // ------------------------------------------------- idempotencia (1.4)
+
+    public function test_reintentar_la_misma_grabacion_no_crea_una_segunda(): void
+    {
+        // El caso que la cola sin conexión provoca de verdad: el servidor
+        // guardó la entrada y la respuesta se perdió por el camino, así que el
+        // móvil la vuelve a subir creyendo que falló.
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $primera = $this->subir($token, ['client_token' => 'cola-abc-123']);
+        $segunda = $this->subir($token, ['client_token' => 'cola-abc-123']);
+
+        $this->assertSame(202, $primera->status);
+        $this->assertSame(202, $segunda->status, 'Un reintento no es un error');
+
+        $uno = json_decode($primera->body, true);
+        $dos = json_decode($segunda->body, true);
+
+        $this->assertSame($uno['uid'], $dos['uid'], 'El reintento creó otra entrada');
+        $this->assertFalse($uno['duplicate']);
+        $this->assertTrue($dos['duplicate']);
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM entries WHERE user_id = ?');
+        $stmt->execute([$a->id]);
+
+        $this->assertSame(1, (int) $stmt->fetchColumn());
+    }
+
+    public function test_un_reintento_no_encola_una_segunda_transcripcion(): void
+    {
+        // Es lo que costaría dinero: dos llamadas de pago por el mismo audio.
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $this->subir($token, ['client_token' => 'cola-abc-123']);
+        $this->subir($token, ['client_token' => 'cola-abc-123']);
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM jobs WHERE user_id = ? AND type = ?');
+        $stmt->execute([$a->id, 'transcribe']);
+
+        $this->assertSame(1, (int) $stmt->fetchColumn());
+    }
+
+    public function test_un_reintento_no_deja_el_audio_duplicado_en_disco(): void
+    {
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $this->subir($token, ['client_token' => 'cola-abc-123']);
+        $this->subir($token, ['client_token' => 'cola-abc-123']);
+
+        $ficheros = glob(Config::basePath('storage/audio/' . $a->uid . '/*/*/*')) ?: [];
+
+        $this->assertCount(1, $ficheros);
+    }
+
+    public function test_dos_grabaciones_distintas_llegan_las_dos(): void
+    {
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $this->subir($token, ['client_token' => 'cola-abc-123']);
+        $this->subir($token, ['client_token' => 'cola-def-456']);
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM entries WHERE user_id = ?');
+        $stmt->execute([$a->id]);
+
+        $this->assertSame(2, (int) $stmt->fetchColumn());
+    }
+
+    public function test_el_testigo_de_uno_no_tapa_la_grabacion_de_otro(): void
+    {
+        // El testigo viene del cliente. Si fuera único en toda la tabla, otra
+        // persona podría hacer desaparecer una grabación ajena adivinándolo.
+        $a = $this->crearUsuario('a');
+        $b = $this->crearUsuario('b');
+
+        $deA = $this->subir($this->iniciarSesion($a), ['client_token' => 'mismo-testigo-1']);
+        $deB = $this->subir($this->iniciarSesion($b), ['client_token' => 'mismo-testigo-1']);
+
+        $this->assertSame(202, $deB->status);
+        $this->assertNotSame(
+            json_decode($deA->body, true)['uid'],
+            json_decode($deB->body, true)['uid'],
+            'La grabación de B se perdió detrás del testigo de A',
+        );
+        $this->assertFalse(json_decode($deB->body, true)['duplicate']);
+    }
+
+    public function test_un_testigo_con_mala_pinta_no_tumba_la_grabacion(): void
+    {
+        // Se ignora y esa subida deja de ser idempotente. Perder lo que la
+        // persona acaba de contar por un campo mal formado sería absurdo.
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $respuesta = $this->subir($token, ['client_token' => 'con espacios y símbolos ñ!']);
+
+        $this->assertSame(202, $respuesta->status);
+
+        $fila = (new EntryRepository($this->pdo, $a->id))
+            ->findByUid(json_decode($respuesta->body, true)['uid']);
+
+        $this->assertNull($fila['client_token']);
+    }
+
+    public function test_sin_testigo_la_subida_sigue_funcionando(): void
+    {
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $this->assertSame(202, $this->subir($token)->status);
+    }
 }

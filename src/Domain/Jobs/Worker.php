@@ -30,10 +30,16 @@ final class Worker
      */
     private const ESPERA_TIPO_DESCONOCIDO = 3600;
 
+    /**
+     * @param  list<string>  $types  a qué tipos atiende; vacío, a todos.
+     *   Existe para poder levantar un segundo worker dedicado a lo rápido
+     *   cuando una transcripción larga tenga a la purga esperando detrás.
+     */
     public function __construct(
         private readonly JobQueue $queue,
         private readonly LoggerInterface $logger,
         private readonly string $id,
+        private readonly array $types = [],
     ) {
     }
 
@@ -76,7 +82,7 @@ final class Worker
      */
     public function step(): ?array
     {
-        $job = $this->queue->claim($this->id);
+        $job = $this->queue->claim($this->id, $this->types);
 
         if ($job === null) {
             return null;

@@ -191,7 +191,7 @@ profesionales. Se detallarán al llegar: diseñarlas ahora sin datos reales es a
 - [x] 1.1 Pantalla de grabación
 - [x] 1.2 API de captura y almacenamiento
 - [x] 1.3 Cola de trabajos y worker
-- [ ] 1.4 Modo offline del cliente
+- [x] 1.4 Modo offline del cliente
 
 ---
 
@@ -471,6 +471,54 @@ y la fila quedó en `purged` con `audio_path` a NULL.
 
 Un fallo real encontrado y corregido (ver Lessons).
 
+**2026-08-30 — Executor, tarea 1.4 terminada.**
+
+Cola local en IndexedDB, en `public/assets/offline.js`, y la orquestación en
+`capture.js`. IndexedDB y no localStorage porque hay que guardar un Blob de
+varios megas. `capture.js` pasa a ser un módulo ES y lo importa.
+
+La regla que manda en todo el fichero: **nunca perder audio en silencio**. Si no
+se puede subir, se guarda y se dice; si tampoco se puede guardar —modo privado
+de iOS, cuota agotada— se dice también, con su propio mensaje, en vez de dejar
+creer que está a salvo.
+
+**La decisión de fondo fue la idempotencia** (migración `005`). Una cola que
+reintenta sin un testigo estable produce duplicados en cuanto una respuesta se
+pierde por el camino: el servidor guardó la entrada, el móvil no se enteró, y al
+recuperar la red la vuelve a subir. Nadie lo notaría —son dos filas plausibles—
+y a los seis meses esa grabación contaría dos veces en todas las medias. En una
+base longitudinal, un duplicado silencioso es peor que un error ruidoso. El
+cliente genera un testigo al terminar de grabar y lo conserva entre reintentos;
+`entries.client_token` es único **por usuario**, no en toda la tabla, porque
+viene de fuera y un testigo adivinado no puede tapar la grabación de nadie.
+
+Los fallos se clasifican, que es lo que distingue una cola útil de una que
+machaca: sin red, 5xx y 429 se reintentan; **401 y 419 también** —la sesión
+caducó, la grabación es buena, solo hay que volver a entrar—; y 413, 415 y 422
+no, porque reintentarlos no los va a arreglar. Una rechazada **no se borra**:
+se marca, se queda en la cola y se enseña el motivo. Borrar audio de alguien sin
+decírselo es lo único que esta cola no puede hacer.
+
+Se reintenta en los tres momentos en que tiene sentido: al recuperar la red, al
+volver a la aplicación y cuando la persona lo pide. `navigator.storage.persist()`
+se pide justo cuando hay algo que perder, no al arrancar.
+
+**195 tests, 1324 aserciones, en verde.**
+
+Criterio de éxito cumplido y verificado en un navegador real a 390 px, claro y
+oscuro, contra la aplicación corriendo: una grabación metida en la cola se sube
+sola al recargar, con su `mood_hint` y con **la hora en que se grabó**, no la del
+envío. Volver a encolar el mismo testigo dejó **una sola entrada** en el
+servidor. Y una que el servidor rechaza se quedó en la cola, marcada, con su
+motivo en pantalla.
+
+⚠️ **Límite conocido de 1.4**: la cola cubre perder la conexión con la
+aplicación ya abierta. Abrirla en frío sin red todavía no funciona —no hay nada
+cacheado— y eso lo arregla el service worker de la 1.5.
+
+Dos fallos reales encontrados por los tests nuevos y uno de aislamiento de la
+propia suite (ver Lessons).
+
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue
 - D10 política de datos de OpenRouter → **antes de enviar la primera transcripción real**
@@ -550,6 +598,19 @@ y añadir la entrada de cron. Instrucciones en `docs/despliegue.md`.
 - Se pueden combinar `time_zone`, `sql_mode` y `collation_connection` en un solo `SET`, que
   es lo que permite meterlos todos en `MYSQL_ATTR_INIT_COMMAND` (solo admite una sentencia)
   y que se reapliquen al reconectar.
+- **Un test que reclama de una cola compartida tiene que acotar lo suyo.** Los
+  tests de la cola hacían `claim()` sin filtro y se llevaban trabajos reales que
+  había dejado una verificación manual en la base de desarrollo. Fallaban por
+  algo que no era el código. Ahora reclaman siempre por tipo, y el `Worker`
+  acepta una lista de tipos —que además hacía falta de verdad, para poder
+  levantar un segundo worker dedicado a lo rápido cuando una transcripción larga
+  tenga a la purga esperando detrás. Se comprobó encolando un intruso a
+  propósito y volviendo a pasar la suite.
+- **Un atributo `data-msg-*` que ya nadie lee arrastra una clave de idioma
+  muerta en cada fichero de idioma.** El test que empareja lo que pide el JS con
+  lo que pone la vista se escribió en un solo sentido y encontró un huérfano;
+  escrito en los dos, encontró otro que era al revés —una clave añadida y nunca
+  usada—. Los dos sentidos, o el fichero de idiomas se pudre solo.
 - **Comprobar `function_exists` de una función y llamar a otra no es comprobar
   nada.** `bin/worker` miraba `pcntl_async_signals` y luego llamaba a
   `pcntl_signal`: en producción la primera existe y la segunda está en

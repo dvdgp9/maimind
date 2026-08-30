@@ -24,6 +24,19 @@ final class EntryRepository extends UserScopedRepository
         return $this->findOneWhere(['uid' => $uid]);
     }
 
+    /**
+     * Busca una entrada por el testigo que trae el cliente.
+     *
+     * Es lo que hace idempotente la subida: si la cola del móvil reintenta una
+     * grabación que ya llegó, aquí aparece y no se crea una segunda fila.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function findByClientToken(string $token): ?array
+    {
+        return $this->findOneWhere(['client_token' => $token], 'uid, local_date, pipeline_state');
+    }
+
     /** @return list<array<string,mixed>> */
     public function recent(int $limit = 20): array
     {
@@ -82,6 +95,7 @@ final class EntryRepository extends UserScopedRepository
         ?int $moodHint,
         int $retentionDays,
         ?string $uid = null,
+        ?string $clientToken = null,
     ): string {
         return $this->createDraft(
             uid: $uid,
@@ -91,6 +105,7 @@ final class EntryRepository extends UserScopedRepository
             utcOffsetMinutes: (int) $clock['utc_offset'],
             moodHint: $moodHint,
             extra: [
+                'client_token'      => $clientToken,
                 'received_at'       => (string) $clock['received_at'],
                 'audio_path'        => (string) $audio['path'],
                 'audio_bytes'       => (int) $audio['bytes'],

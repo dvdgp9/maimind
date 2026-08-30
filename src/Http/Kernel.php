@@ -18,6 +18,7 @@ use MaiMind\Support\Config;
 use MaiMind\Support\Lang;
 use MaiMind\Support\Ulid;
 use PDO;
+use PDOException;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -336,6 +337,22 @@ final class Kernel
             ], 422);
         }
 
+        // Lo primero, antes de tocar el disco: ¿es esta grabación una que ya
+        // llegó? La cola sin conexión del móvil reintenta, y un reintento cuya
+        // respuesta anterior se perdió por el camino no puede crear una segunda
+        // entrada. Devolver la que ya existe es la respuesta correcta, no un
+        // error: para el cliente el resultado es idéntico.
+        $entries      = $this->entriesFor($user);
+        $clientToken  = $this->clientToken($request->input('client_token'));
+
+        if ($clientToken !== null) {
+            $anterior = $entries->findByClientToken($clientToken);
+
+            if ($anterior !== null) {
+                return $this->capturaAceptada($anterior['uid'], (string) $anterior['local_date'], true);
+            }
+        }
+
         $mime = (string) ($request->input('mime') ?? $file['type']);
 
         if (! AudioStore::isAccepted($mime)) {
@@ -364,8 +381,7 @@ final class Kernel
             $this->logger->warning('Reloj del cliente fuera de rango', ['user_id' => $user->id]);
         }
 
-        $entries = $this->entriesFor($user);
-        $store   = new AudioStore(Config::basePath((string) config('app.paths.storage')));
+        $store = new AudioStore(Config::basePath((string) config('app.paths.storage')));
 
         $uid = Ulid::generate();
 
@@ -382,17 +398,35 @@ final class Kernel
 
         $moodHint = $this->moodHint($request->input('mood_hint'));
 
-        $entryUid = $entries->createFromAudio(
-            clock: $clock,
-            audio: [
-                ...$stored,
-                'mime'        => AudioStore::normalizeMime($mime),
-                'duration_ms' => $this->durationMs($request->input('duration_ms')),
-            ],
-            moodHint: $moodHint,
-            retentionDays: (int) config('services.audio.retention_days'),
-            uid: $uid,
-        );
+        try {
+            $entryUid = $entries->createFromAudio(
+                clock: $clock,
+                audio: [
+                    ...$stored,
+                    'mime'        => AudioStore::normalizeMime($mime),
+                    'duration_ms' => $this->durationMs($request->input('duration_ms')),
+                ],
+                moodHint: $moodHint,
+                retentionDays: (int) config('services.audio.retention_days'),
+                uid: $uid,
+                clientToken: $clientToken,
+            );
+        } catch (PDOException $e) {
+            // Dos reintentos a la vez: la comprobación de arriba la ganaron los
+            // dos y la unicidad de la base decide. Quien pierde se lleva la
+            // entrada del que ganó, que es lo que el cliente venía a buscar.
+            $anterior = $clientToken !== null && $e->getCode() === '23000'
+                ? $entries->findByClientToken($clientToken)
+                : null;
+
+            if ($anterior === null) {
+                throw $e;
+            }
+
+            $store->delete($stored['path']);
+
+            return $this->capturaAceptada($anterior['uid'], (string) $anterior['local_date'], true);
+        }
 
         // A partir de aquí el trabajo es del worker. Encolar puede fallar sin
         // que la grabación se pierda: el audio y la fila ya están, y el
@@ -423,13 +457,40 @@ final class Kernel
             'has_mood' => $moodHint !== null,
         ]);
 
-        // 202 y no 201: la grabación está guardada, pero el trabajo sobre ella
-        // acaba de empezar. El usuario ya puede cerrar la aplicación.
+        return $this->capturaAceptada($entryUid, (string) $clock['local_date']);
+    }
+
+    /**
+     * Respuesta de una captura aceptada.
+     *
+     * 202 y no 201: la grabación está guardada, pero el trabajo sobre ella
+     * acaba de empezar. El usuario ya puede cerrar la aplicación.
+     *
+     * Una grabación repetida devuelve lo mismo, con `duplicate` a true: para la
+     * cola del cliente el resultado es el mismo —ya está a salvo, bórrala— y
+     * distinguirlas solo sirve para no mentir en los registros.
+     */
+    private function capturaAceptada(string $uid, string $localDate, bool $duplicada = false): Response
+    {
         return Response::json([
-            'uid'        => $entryUid,
-            'local_date' => $clock['local_date'],
+            'uid'        => $uid,
+            'local_date' => $localDate,
             'state'      => 'captured',
+            'duplicate'  => $duplicada,
         ], 202);
+    }
+
+    /**
+     * El testigo lo genera el cliente, así que se acota antes de tocar nada:
+     * solo caracteres de identificador y una longitud razonable. Uno que no
+     * cumpla no se rechaza —perder la grabación por eso sería absurdo—, se
+     * ignora y esa subida deja de ser idempotente.
+     */
+    private function clientToken(?string $raw): ?string
+    {
+        $token = trim((string) $raw);
+
+        return preg_match('/^[A-Za-z0-9_-]{8,64}$/', $token) === 1 ? $token : null;
     }
 
     private function moodHint(?string $raw): ?int

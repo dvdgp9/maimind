@@ -114,4 +114,6 @@ segunda vez.
 
 ## Pendiente
 
-- Nada del despliegue. Lo siguiente es la tarea 1.4 (modo offline del cliente).
+- Nada del despliegue. Lo siguiente es la tarea 1.5 (PWA instalable), que añade
+  el service worker: hasta entonces, abrir la aplicación **sin red** no funciona
+  aunque la cola de grabaciones sí.

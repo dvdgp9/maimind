@@ -143,6 +143,61 @@ final class DisenoTest extends TestCase
         Icon::render('../../.env');
     }
 
+
+    public function test_cada_texto_que_pide_el_javascript_existe_en_la_vista(): void
+    {
+        // El JS no lleva textos dentro: los lee de atributos data-msg-*, para
+        // que sigan viviendo en los ficheros de idioma. El precio de esa regla
+        // es que una errata no da error: pinta "undefined" en pantalla. Esto lo
+        // convierte en un test que falla.
+        $js    = (string) file_get_contents(Config::basePath('public/assets/capture.js'));
+        $vista = (string) file_get_contents(Config::basePath('resources/views/inicio.php'));
+
+        preg_match_all('/dataset\.msg([A-Za-z0-9]+)/', $js, $coincidencias);
+
+        $pedidos = array_unique($coincidencias[1]);
+
+        $this->assertNotEmpty($pedidos, 'El JS ya no lee textos de la vista: ¿se han metido dentro?');
+
+        $pedidos = array_map(
+            // msgPendingOne → data-msg-pending-one
+            static fn (string $n): string => 'data-msg-' . strtolower(
+                (string) preg_replace('/(?<!^)[A-Z]/', '-$0', $n)
+            ),
+            $pedidos,
+        );
+
+        preg_match_all('/data-msg-[a-z-]+/', $vista, $puestos);
+
+        $puestos = array_unique($puestos[0]);
+
+        foreach ($pedidos as $atributo) {
+            $this->assertContains($atributo, $puestos, "El JS pide {$atributo} y la vista no lo pone");
+        }
+
+        // Y al revés: un atributo que ya nadie lee arrastra consigo una clave de
+        // idioma muerta en los dos ficheros. Así no se acumulan.
+        foreach ($puestos as $atributo) {
+            $this->assertContains($atributo, $pedidos, "La vista pone {$atributo} y nadie lo lee");
+        }
+    }
+
+    public function test_el_javascript_no_lleva_textos_dentro(): void
+    {
+        foreach (['capture.js', 'offline.js', 'app.js'] as $fichero) {
+            $codigo = (string) file_get_contents(Config::basePath('public/assets/' . $fichero));
+
+            // Se quitan los comentarios: ahí sí se escribe en español.
+            $codigo = (string) preg_replace('#/\*.*?\*/|//[^\n]*#s', '', $codigo);
+
+            $this->assertSame(
+                0,
+                preg_match('/[áéíóúñ¿¡]/iu', $codigo, $m),
+                "{$fichero} tiene texto en español fuera de un comentario: los textos van en resources/lang",
+            );
+        }
+    }
+
     public function test_no_se_prometen_rachas_ni_celebraciones(): void
     {
         // Una racha castiga los huecos, que son el dato más informativo, y hace

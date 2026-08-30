@@ -25,7 +25,12 @@ use MaiMind\Support\Format;
      data-msg-recording="<?= e(t('capture.recording')) ?>"
      data-msg-saving="<?= e(t('capture.saving')) ?>"
      data-msg-saved="<?= e(t('capture.saved')) ?>"
-     data-msg-offline="<?= e(t('capture.offline_queued')) ?>"
+     data-msg-queued="<?= e(t('capture.queued')) ?>"
+     data-msg-pending-one="<?= e(t('capture.pending_one')) ?>"
+     data-msg-pending-many="<?= e(t('capture.pending_many')) ?>"
+     data-msg-sending-queue="<?= e(t('capture.sending_queue')) ?>"
+     data-msg-session-gone="<?= e(t('capture.session_gone')) ?>"
+     data-msg-queue-failed="<?= e(t('errors.queue_failed')) ?>"
      data-msg-generic="<?= e(t('errors.generic')) ?>"
      data-msg-mic-denied="<?= e(t('errors.mic_denied')) ?>"
      data-msg-mic-missing="<?= e(t('errors.mic_missing')) ?>"
@@ -53,6 +58,23 @@ use MaiMind\Support\Format;
     </button>
 </div>
 
+<?php /* Lo que quedó sin enviar. Oculto mientras no haya nada: no es un aviso
+         permanente, es un hecho que aparece cuando ocurre. */ ?>
+<section class="panel queue" data-queue hidden>
+    <p class="queue__count">
+        <?= icon('clock', 18) ?>
+        <span data-queue-count></span>
+    </p>
+
+    <?php /* El motivo de una que el servidor no admite. Elemento de verdad y no
+             CSS generado: los lectores de pantalla no anuncian ::after. */ ?>
+    <p class="queue__reason" data-queue-reason hidden></p>
+
+    <button type="button" class="link" data-queue-retry>
+        <?= e(t('capture.retry')) ?>
+    </button>
+</section>
+
 <section class="panel">
     <h2><?= e(t('capture.last_entry')) ?></h2>
 
@@ -75,4 +97,6 @@ use MaiMind\Support\Format;
     <?php endif; ?>
 </section>
 
-<script src="/assets/capture.js" defer></script>
+<?php /* Módulo: capture.js importa la cola de offline.js. Los módulos ya se
+         cargan diferidos, así que no hace falta `defer`. */ ?>
+<script type="module" src="/assets/capture.js"></script>

@@ -69,6 +69,20 @@ final class ColaTrabajosTest extends TestCase
         return self::PREFIJO . $sufijo;
     }
 
+    /**
+     * Reclama acotando a los tipos de prueba.
+     *
+     * Nunca `claim()` a secas en un test: la tabla es compartida y un reclamo
+     * sin filtro se lleva lo primero que haya en la cola de desarrollo. Costó
+     * un fallo que no era del código.
+     */
+    private function reclamar(string $worker = 'w'): ?array
+    {
+        return $this->queue->claim($worker, [
+            $this->tipo(), $this->tipo('otro'), $this->tipo('futuro'), $this->tipo('este'),
+        ]);
+    }
+
     // ------------------------------------------------------------ lo básico
 
     public function test_encolar_y_reclamar_devuelve_el_trabajo(): void
@@ -77,7 +91,7 @@ final class ColaTrabajosTest extends TestCase
 
         $this->assertIsInt($id);
 
-        $job = $this->queue->claim('worker-1');
+        $job = $this->reclamar('worker-1');
 
         $this->assertNotNull($job);
         $this->assertSame($id, (int) $job['id']);
@@ -98,7 +112,7 @@ final class ColaTrabajosTest extends TestCase
         // registrar nada y volvería a tumbarlo para siempre.
         $id = $this->queue->push($this->tipo());
 
-        $job = $this->queue->claim('worker-1');
+        $job = $this->reclamar('worker-1');
 
         $this->assertSame(1, (int) $job['attempts']);
     }
@@ -116,9 +130,9 @@ final class ColaTrabajosTest extends TestCase
         $urgente   = $this->queue->push($this->tipo(), priority: 1);
         $postergado = $this->queue->push($this->tipo(), priority: 9);
 
-        $this->assertSame($urgente, (int) $this->queue->claim('w')['id']);
-        $this->assertSame($normal, (int) $this->queue->claim('w')['id']);
-        $this->assertSame($postergado, (int) $this->queue->claim('w')['id']);
+        $this->assertSame($urgente, (int) $this->reclamar('w')['id']);
+        $this->assertSame($normal, (int) $this->reclamar('w')['id']);
+        $this->assertSame($postergado, (int) $this->reclamar('w')['id']);
     }
 
     public function test_el_filtro_de_tipos_se_respeta(): void
@@ -152,7 +166,7 @@ final class ColaTrabajosTest extends TestCase
     {
         $id = $this->queue->push($this->tipo(), dedupeKey: 'purga-diaria');
 
-        $this->queue->claim('w');
+        $this->reclamar('w');
         $this->queue->complete($id);
 
         $this->assertIsInt(
@@ -178,7 +192,8 @@ final class ColaTrabajosTest extends TestCase
         $reclamados = [];
 
         for ($i = 0; $i < 6; $i++) {
-            $job = ($i % 2 === 0 ? $colaA : $colaB)->claim('worker-' . ($i % 2));
+            $job = ($i % 2 === 0 ? $colaA : $colaB)
+                ->claim('worker-' . ($i % 2), [$this->tipo()]);
 
             $this->assertNotNull($job);
 
@@ -187,7 +202,10 @@ final class ColaTrabajosTest extends TestCase
 
         $this->assertSame($ids, $reclamados);
         $this->assertCount(6, array_unique($reclamados), 'Un trabajo se reclamó dos veces');
-        $this->assertNull($colaA->claim('worker-0'), 'La cola debería haber quedado vacía');
+        $this->assertNull(
+            $colaA->claim('worker-0', [$this->tipo()]),
+            'La cola debería haber quedado vacía',
+        );
     }
 
     public function test_un_trabajo_bloqueado_se_salta_en_vez_de_esperarlo(): void
@@ -206,7 +224,7 @@ final class ColaTrabajosTest extends TestCase
         $stmt->execute([$primero]);
 
         $inicio = microtime(true);
-        $job    = (new JobQueue(Database::connect()))->claim('worker-b');
+        $job    = (new JobQueue(Database::connect()))->claim('worker-b', [$this->tipo()]);
         $tardo  = microtime(true) - $inicio;
 
         $lento->rollBack();
@@ -228,7 +246,7 @@ final class ColaTrabajosTest extends TestCase
     {
         $id = $this->queue->push($this->tipo(), maxAttempts: 3);
 
-        $this->queue->claim('w');
+        $this->reclamar('w');
 
         $this->assertSame(JobQueue::PENDING, $this->queue->fail($id, 'la API no respondió'));
 
@@ -246,12 +264,12 @@ final class ColaTrabajosTest extends TestCase
     {
         $id = $this->queue->push($this->tipo(), maxAttempts: 2);
 
-        $this->queue->claim('w');
+        $this->reclamar('w');
         $this->assertSame(JobQueue::PENDING, $this->queue->fail($id, 'primero'));
 
         // El segundo intento agota el máximo.
         $this->pdo->prepare('UPDATE jobs SET run_after = UTC_TIMESTAMP(3) WHERE id = ?')->execute([$id]);
-        $this->queue->claim('w');
+        $this->reclamar('w');
 
         $this->assertSame(JobQueue::DEAD, $this->queue->fail($id, 'segundo'));
         $this->assertSame(JobQueue::DEAD, $this->queue->find($id)['state']);
@@ -270,7 +288,7 @@ final class ColaTrabajosTest extends TestCase
     {
         $id = $this->queue->push($this->tipo(), maxAttempts: 1);
 
-        $this->queue->claim('w');
+        $this->reclamar('w');
         $this->queue->fail($id, 'roto');
 
         $this->assertTrue($this->queue->retry($id));
@@ -285,7 +303,7 @@ final class ColaTrabajosTest extends TestCase
     {
         $id = $this->queue->push($this->tipo());
 
-        $this->queue->claim('w');
+        $this->reclamar('w');
         $this->assertSame(1, (int) $this->queue->find($id)['attempts']);
 
         $this->queue->defer($id, 60, 'sin manejador todavía');
@@ -298,7 +316,7 @@ final class ColaTrabajosTest extends TestCase
     {
         $id = $this->queue->push($this->tipo());
 
-        $this->queue->claim('worker-difunto');
+        $this->reclamar('worker-difunto');
 
         // Su bloqueo es de hace media hora.
         $this->pdo->prepare(
@@ -318,7 +336,7 @@ final class ColaTrabajosTest extends TestCase
     public function test_un_trabajo_recien_reclamado_no_se_da_por_perdido(): void
     {
         $this->queue->push($this->tipo());
-        $this->queue->claim('worker-vivo');
+        $this->reclamar('worker-vivo');
 
         $this->assertSame(0, $this->queue->reclaimStale(900));
     }
@@ -328,9 +346,9 @@ final class ColaTrabajosTest extends TestCase
         $hecho  = $this->queue->push($this->tipo());
         $muerto = $this->queue->push($this->tipo(), maxAttempts: 1);
 
-        $this->queue->claim('w');
+        $this->reclamar('w');
         $this->queue->complete($hecho);
-        $this->queue->claim('w');
+        $this->reclamar('w');
         $this->queue->fail($muerto, 'roto');
 
         $this->pdo->exec(
@@ -447,8 +465,10 @@ final class ColaTrabajosTest extends TestCase
 
     private function workerCon(JobHandler $handler): Worker
     {
-        return (new Worker($this->queue, new NullLogger(), 'worker-de-pruebas'))
-            ->register($handler);
+        // Acotado a los tipos de prueba: la tabla es compartida.
+        return (new Worker($this->queue, new NullLogger(), 'worker-de-pruebas', [
+            $this->tipo(), $this->tipo('otro'), $this->tipo('futuro'),
+        ]))->register($handler);
     }
 
     private function manejador(string $tipo, callable $accion): JobHandler

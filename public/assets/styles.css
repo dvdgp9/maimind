@@ -353,6 +353,27 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
 
 .capture__cancel { margin-top: 0.35rem; }
 
+/* Una grabación en cola no es un error ni una alarma: es un hecho. Va con el
+   mismo peso que cualquier otro dato de la pantalla, sin color de aviso —la
+   paleta no tiene ninguno— y sin insistir. Ver 06-diseno-y-tono.md §3. */
+.capture[data-state="queued"] .capture__status { color: var(--ink); }
+
+.queue__count {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0 0.6rem;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+}
+
+/* El motivo de una grabación que el servidor no admite. */
+.queue__reason {
+    margin: 0 0 0.6rem;
+    font-size: 0.8125rem;
+    color: var(--ink);
+}
+
 .card--row {
     display: flex;
     align-items: center;

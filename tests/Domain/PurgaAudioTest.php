@@ -207,7 +207,7 @@ final class PurgaAudioTest extends AppTestCase
             dedupeKey: 'purge_audio:' . $a->id . ':2026-08-30',
         );
 
-        $recuento = (new Worker($queue, new NullLogger(), 'worker-de-pruebas'))
+        $recuento = (new Worker($queue, new NullLogger(), 'worker-de-pruebas', ['purge_audio']))
             ->register($this->handler())
             ->drain();
 
