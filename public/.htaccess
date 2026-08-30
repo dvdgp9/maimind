@@ -15,6 +15,20 @@ Options -Indexes -MultiViews
     RewriteRule ^ index.php [L]
 </IfModule>
 
+# Apache no conoce .webmanifest de serie y lo serviría como texto plano.
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+# El service worker no se cachea. Si se cacheara, una versión nueva podría
+# tardar hasta un día en llegar al teléfono de alguien, y con ella todos los
+# assets que ese worker decide servir desde su propia caché.
+<Files "sw.js">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-cache, max-age=0"
+    </IfModule>
+</Files>
+
 # Los ficheros ocultos no se sirven nunca.
 <FilesMatch "^\.">
     Require all denied

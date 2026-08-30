@@ -1,0 +1,157 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Genera los iconos de la PWA.
+ *
+ *   php bin/icons
+ *
+ * Existe como script y no como cuatro PNG sueltos en el repositorio para que el
+ * icono se pueda rehacer cuando cambie la paleta, y para que quede escrito de
+ * dónde sale: es el botón de grabar —círculo de acento, micrófono encima— que
+ * es lo único que esta aplicación enseña en su pantalla principal.
+ *
+ * Se dibuja al cuádruple y se reduce después: GD no antialiasa trazos gruesos
+ * ni arcos rellenos, y reducir sí.
+ */
+
+$app = require dirname(__DIR__) . '/src/bootstrap.php';
+
+use MaiMind\Support\Config;
+
+const ESCALA = 4;
+
+/** Almond Hearth, el fondo de la aplicación en claro. */
+const FONDO  = [0xFA, 0xF3, 0xEA];
+/** Velvet Curfew, «lo que se toca». */
+const ACENTO = [0x4B, 0x26, 0x2F];
+
+/**
+ * @param  float  $proporcion  radio del círculo respecto al lado
+ */
+function dibuja(int $lado, float $proporcion): GdImage
+{
+    $s = $lado * ESCALA;
+
+    $lienzo = imagecreatetruecolor($s, $s);
+
+    $fondo  = imagecolorallocate($lienzo, ...FONDO);
+    $acento = imagecolorallocate($lienzo, ...ACENTO);
+
+    imagefilledrectangle($lienzo, 0, 0, $s, $s, $fondo);
+
+    $cx = $s / 2;
+    $cy = $s / 2;
+    $r  = $s * $proporcion;
+
+    imagefilledellipse($lienzo, (int) $cx, (int) $cy, (int) ($r * 2), (int) ($r * 2), $acento);
+
+    // --- micrófono, en color de fondo sobre el círculo -------------------
+
+    // Cuna: un arco grueso, hecho vaciando un sector con otro más pequeño.
+    // imagearc con grosor deja los extremos cuadrados y sin suavizar, así que
+    // no sirve.
+    //
+    // Los dos sectores llevan EXACTAMENTE los mismos ángulos. Con ángulos
+    // distintos, el de dentro se sale por debajo del arco y se come la base de
+    // la cápsula; costó un icono con el micrófono cortado.
+    $grosor    = $r * 0.11;
+    $radioCuna = $r * 0.60;
+    $cunaY     = $cy - $r * 0.06;
+
+    // En GD los ángulos crecen en el sentido de las agujas desde las 3 en
+    // punto, así que 20..160 barre por abajo: la U que sostiene el micrófono.
+    foreach ([[$radioCuna, $fondo], [$radioCuna - $grosor, $acento]] as [$radio, $color]) {
+        imagefilledarc(
+            $lienzo,
+            (int) $cx, (int) $cunaY,
+            (int) ($radio * 2), (int) ($radio * 2),
+            20, 160,
+            $color,
+            IMG_ARC_PIE,
+        );
+    }
+
+    // Pie: del fondo del arco hacia abajo.
+    imagefilledrectangle(
+        $lienzo,
+        (int) ($cx - $grosor / 2),
+        (int) ($cunaY + $radioCuna - $grosor),
+        (int) ($cx + $grosor / 2),
+        (int) ($cy + $r * 0.74),
+        $fondo,
+    );
+
+    // La cápsula, la última: el sector que vacía la cuna tiene su vértice en el
+    // centro, es decir, dentro de la cápsula. Dibujada antes, el vértice le
+    // comía la base en forma de uve.
+    // Cápsula: un rectángulo con dos semicírculos.
+    $anchoCapsula = $r * 0.44;
+    $altoCapsula  = $r * 0.86;
+    $capsulaY     = $cy - $r * 0.16;
+
+    imagefilledrectangle(
+        $lienzo,
+        (int) ($cx - $anchoCapsula / 2),
+        (int) ($capsulaY - $altoCapsula / 2 + $anchoCapsula / 2),
+        (int) ($cx + $anchoCapsula / 2),
+        (int) ($capsulaY + $altoCapsula / 2 - $anchoCapsula / 2),
+        $fondo,
+    );
+
+    foreach ([-1, 1] as $extremo) {
+        imagefilledellipse(
+            $lienzo,
+            (int) $cx,
+            (int) ($capsulaY + $extremo * ($altoCapsula / 2 - $anchoCapsula / 2)),
+            (int) $anchoCapsula,
+            (int) $anchoCapsula,
+            $fondo,
+        );
+    }
+
+    // Bilineal y no bicúbica: IMG_BICUBIC devuelve false en algunas
+    // compilaciones de GD (la de este Mac, sin ir más lejos). Reduciendo desde
+    // el cuádruple la diferencia no se ve.
+    $reducido = imagescale($lienzo, $lado, $lado, IMG_BILINEAR_FIXED);
+
+    imagedestroy($lienzo);
+
+    if ($reducido === false) {
+        throw new RuntimeException('GD no pudo reducir la imagen a ' . $lado . 'px.');
+    }
+
+    return $reducido;
+}
+
+$destino = Config::basePath('public/icons');
+
+if (! is_dir($destino) && ! mkdir($destino, 0755, true)) {
+    fwrite(STDERR, "No se pudo crear {$destino}\n");
+    exit(1);
+}
+
+$iconos = [
+    // El icono normal ocupa lo que puede.
+    'icon-192.png'          => [192, 0.40],
+    'icon-512.png'          => [512, 0.40],
+    // El enmascarable se encoge para caber en la zona segura que recortan
+    // Android y compañía: el 80 % central. Si no, le cortan el micrófono.
+    'icon-maskable-512.png' => [512, 0.32],
+    // iOS no admite transparencia ni redondea por su cuenta si la hay.
+    'apple-touch-icon.png'  => [180, 0.40],
+];
+
+foreach ($iconos as $nombre => [$lado, $proporcion]) {
+    $imagen = dibuja($lado, $proporcion);
+
+    imagepng($imagen, $destino . '/' . $nombre, 9);
+    imagedestroy($imagen);
+
+    printf("  %-24s %d×%d\n", $nombre, $lado, $lado);
+}
+
+echo "\nIconos escritos en public/icons/\n";
+exit(0);

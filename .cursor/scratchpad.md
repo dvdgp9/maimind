@@ -192,6 +192,9 @@ profesionales. Se detallarán al llegar: diseñarlas ahora sin datos reales es a
 - [x] 1.2 API de captura y almacenamiento
 - [x] 1.3 Cola de trabajos y worker
 - [x] 1.4 Modo offline del cliente
+- [x] 1.5 PWA instalable — **FASE 1 COMPLETA**
+- [ ] D10 Política de datos de OpenRouter — *bloquea la fase 2*
+- [ ] 2.1 Interfaz TranscriptionProvider + implementación falsa
 
 ---
 
@@ -519,6 +522,61 @@ cacheado— y eso lo arregla el service worker de la 1.5.
 Dos fallos reales encontrados por los tests nuevos y uno de aislamiento de la
 propia suite (ver Lessons).
 
+**2026-08-30 — Executor, tarea 1.5 terminada. FASE 1 COMPLETA.**
+
+Manifest, service worker, iconos y el paso que explica cómo instalarla en iOS.
+
+**Los iconos se generan, no se dibujan a mano** (`bin/icons`, con GD). Son el
+botón de grabar —círculo de acento, micrófono encima—, que es lo único que la
+aplicación enseña en su pantalla principal. Como script y no como cuatro PNG
+sueltos para poder rehacerlos cuando cambie la paleta y para que quede escrito
+de dónde salen. El enmascarable se encoge al 32 % del lado porque Android
+recorta el 80 % central y si no se lleva el micrófono por delante.
+
+**El service worker cachea en dos almacenes separados, y esa separación es el
+punto delicado.** Los estáticos no llevan datos de nadie; el HTML de la pantalla
+principal **sí** —el nombre de quien entró y su testigo CSRF—, así que vive
+aparte y se borra al cerrar sesión. Sin eso, el siguiente que abriera la
+aplicación en ese teléfono se encontraría la pantalla del anterior. Las páginas
+van primero a la red (enseñar el último registro de anteayer sería mentir) y los
+estáticos primero a la caché. La API no se cachea nunca y las subidas ni se
+tocan: la única que sabe si una grabación ya llegó es la cola de IndexedDB.
+
+**Sin notificaciones**, según 06-diseno-y-tono.md §6. Hay un test que falla si
+alguien mete `Notification` o `pushManager` en cualquiera de los tres ficheros.
+
+En iOS no existe el aviso de instalación, así que se explican los pasos a mano.
+La detección es `'standalone' in navigator`, que solo existe en Safari de iOS:
+es detección de característica, no lectura del user-agent. Se enseña una vez y
+«Ahora no» se recuerda; insistir sería la gamificación que prohíbe §3.
+
+**Hay tests de JavaScript por primera vez** (`tests/js/`, con `node --test`, sin
+dependencias). PHPUnit no puede ejecutar un service worker, y lo que ese fichero
+decide es justo la clase de código cuyos errores no dan error: cachear una
+respuesta de la API o dejar el HTML de otra persona en un teléfono no rompe
+nada, solo hace daño en silencio. Se comprobó que sirven rompiendo el guardián
+de la API y el borrado al salir: los dos fallaron. Se quitaron de PwaTest los dos
+tests que comprobaban lo mismo buscando cadenas en el fichero — daban falsa
+tranquilidad. **`composer test` corre ahora las dos suites.**
+
+**203 tests de PHP (1371 aserciones) y 11 de JavaScript, en verde.**
+
+⚠️ **Lo que NO se ha podido verificar.** El panel de navegador de esta sesión
+**tiene los service workers deshabilitados**: hasta uno de dos líneas falla con
+*An unknown error occurred when fetching the script*, y la petición no llega
+nunca al servidor (comprobado en el log). Así que del registro del worker, el
+funcionamiento sin red de verdad y la instalación real en un teléfono **no hay
+evidencia**: solo los tests de su lógica y la revisión del código. Queda por
+comprobar en un móvil contra producción. Lo demás sí se verificó en el
+navegador: manifest servido como `application/manifest+json`, iconos, la página
+sin conexión, y el panel de instalación en sus dos ramas —con el botón de
+Android y con los pasos de iOS— más que «Ahora no» se recuerda y no vuelve.
+
+⚠️ **Trampa para el futuro**: `VERSION` en `sw.js` es lo único que invalida la
+caché. Tocar `public/assets/` sin subirlo deja a los teléfonos instalados con el
+CSS y el JS viejos indefinidamente, y desde el servidor no se ve nada raro.
+Anotado en `docs/despliegue.md`.
+
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue
 - D10 política de datos de OpenRouter → **antes de enviar la primera transcripción real**
@@ -598,6 +656,25 @@ y añadir la entrada de cron. Instrucciones en `docs/despliegue.md`.
 - Se pueden combinar `time_zone`, `sql_mode` y `collation_connection` en un solo `SET`, que
   es lo que permite meterlos todos en `MYSQL_ATTR_INIT_COMMAND` (solo admite una sentencia)
   y que se reapliquen al reconectar.
+- **Un test que solo busca cadenas en un fichero da falsa tranquilidad.** Los
+  primeros tests del service worker comprobaban que `sw.js` contuviera
+  `startsWith('/api/')`. La cadena puede seguir ahí y la lógica estar mal, y de
+  hecho ese fichero es todo lógica invisible. Ejecutarlo de verdad con
+  `node --test` y un `self` de mentira cuesta poco más y sí falla cuando se
+  rompe: comprobado rompiéndolo a propósito dos veces.
+- **`imagescale` con `IMG_BICUBIC` devuelve `false`** en algunas compilaciones
+  de GD, la de este Mac incluida, y sin decir por qué. `IMG_BILINEAR_FIXED`
+  funciona, y reduciendo desde el cuádruple no se nota la diferencia.
+- **El orden de dibujo importa cuando se vacía una figura con otra.** El arco
+  del micrófono se hace vaciando un sector con otro más pequeño, y el vértice
+  del sector cae dentro de la cápsula: dibujada antes, se la comía en forma de
+  uve. Los dos sectores además tienen que llevar exactamente los mismos ángulos.
+- **`php -S` no basta para todo, pero tampoco era la culpa.** Ante un service
+  worker que no registraba, el primer sospechoso fue el servidor de desarrollo
+  (es de un solo proceso; se puede paliar con `PHP_CLI_SERVER_WORKERS=4`). No
+  era eso: el log del servidor no registraba **ninguna** petición del script, y
+  un worker de dos líneas fallaba igual. Antes de arreglar nada, comprobar si la
+  petición llega siquiera.
 - **Un test que reclama de una cola compartida tiene que acotar lo suyo.** Los
   tests de la cola hacían `claim()` sin filtro y se llevaban trabajos reales que
   había dejado una verificación manual en la base de desarrollo. Fallaban por

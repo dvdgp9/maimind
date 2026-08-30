@@ -225,6 +225,12 @@ final class Kernel
             return $this->startSessionAndRedirect($result['user'], $request);
         }, auth: false);
 
+        // La enseña el service worker cuando no hay red ni copia de la página
+        // que se pedía. Pública y sin datos de nadie: se cachea tal cual.
+        $r->get('/sin-conexion', function (Request $request): Response {
+            return Response::html(View::render('sin-conexion', ['user' => null]));
+        }, auth: false);
+
         $r->get('/registro', function (Request $request): Response {
             $token = $this->csrfTokenFor($request);
 

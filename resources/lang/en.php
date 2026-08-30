@@ -97,6 +97,20 @@ return [
         'too_many_attempts'   => 'Too many attempts. Try again in :minutes minutes',
     ],
 
+    'install' => [
+        'title'      => 'Put it on your home screen',
+        'why'        => 'It opens full screen in one tap, without going through the browser.',
+        'ios_steps'  => 'Tap Share, at the bottom, then “Add to Home Screen”.',
+        'action'     => 'Install',
+        'dismiss'    => 'Not now',
+    ],
+
+    'offline' => [
+        'title'      => 'No connection',
+        'body'       => 'I could not load the app. Try again when you are back online.',
+        'queue_safe' => 'Anything you recorded is still stored on this device and will send itself.',
+    ],
+
     'errors' => [
         'generic'        => 'Something went wrong. Try again.',
         'csrf'           => 'The form expired. Please try again.',

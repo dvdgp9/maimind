@@ -184,7 +184,7 @@ final class DisenoTest extends TestCase
 
     public function test_el_javascript_no_lleva_textos_dentro(): void
     {
-        foreach (['capture.js', 'offline.js', 'app.js'] as $fichero) {
+        foreach (['capture.js', 'offline.js', 'pwa.js', 'app.js'] as $fichero) {
             $codigo = (string) file_get_contents(Config::basePath('public/assets/' . $fichero));
 
             // Se quitan los comentarios: ahí sí se escribe en español.

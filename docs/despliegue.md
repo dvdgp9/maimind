@@ -112,8 +112,37 @@ manejador del worker, con sus reintentos y su registro— en vez de dos que se
 van separando con el tiempo. Lanzarlo dos veces el mismo día no encola nada la
 segunda vez.
 
+## Service worker: la trampa de la versión
+
+`public/sw.js` empieza con `const VERSION = 'v1'`. Ese número es lo único que
+invalida la caché del navegador.
+
+**Al tocar cualquier fichero de `public/assets/` hay que subirlo.** Si no, los
+teléfonos que ya tienen la aplicación instalada seguirán sirviéndose el CSS y el
+JavaScript viejos desde su propia caché, indefinidamente, y desde el servidor no
+se ve nada raro: el despliegue habrá ido bien y la gente estará usando la
+versión anterior.
+
+Los iconos van versionados en `public/icons/`, así que el despliegue no tiene
+que generarlos. Si cambia la paleta:
+
+```bash
+php bin/icons
+```
+
+## Probar
+
+```bash
+composer test        # PHPUnit y los tests del service worker
+composer check       # comprobación de entorno
+```
+
+Los del service worker corren con Node (`node --test`) porque PHPUnit no puede
+ejecutar JavaScript, y lo que decide ese fichero —qué cachea y qué borra al
+cerrar sesión— no se puede comprobar buscando cadenas.
+
 ## Pendiente
 
-- Nada del despliegue. Lo siguiente es la tarea 1.5 (PWA instalable), que añade
-  el service worker: hasta entonces, abrir la aplicación **sin red** no funciona
-  aunque la cola de grabaciones sí.
+- Nada del despliegue. Lo siguiente es la fase 2 (transcripción), que necesita
+  **D10 resuelto antes**: configurar la política de datos de OpenRouter para que
+  solo entren proveedores que no entrenan con lo que se les manda.

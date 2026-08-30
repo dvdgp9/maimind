@@ -367,6 +367,23 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
     color: var(--ink-soft);
 }
 
+/* La invitación a instalar. Se enseña una vez y se puede cerrar; no insiste. */
+.install__title {
+    margin: 0 0 0.3rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+.install__steps {
+    margin: 0.6rem 0 0;
+    font-size: 0.875rem;
+    color: var(--ink);
+}
+
+.install .button { margin-top: 0.85rem; }
+
+.install .link { margin-top: 0.6rem; }
+
 /* El motivo de una grabación que el servidor no admite. */
 .queue__reason {
     margin: 0 0 0.6rem;

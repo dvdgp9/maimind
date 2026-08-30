@@ -97,6 +97,20 @@ return [
         'too_many_attempts'   => 'Demasiados intentos. Prueba de nuevo en :minutes minutos',
     ],
 
+    'install' => [
+        'title'      => 'Ponla en tu pantalla de inicio',
+        'why'        => 'Se abre a pantalla completa y de un toque, sin pasar por el navegador.',
+        'ios_steps'  => 'Toca Compartir, abajo, y luego «Añadir a pantalla de inicio».',
+        'action'     => 'Instalar',
+        'dismiss'    => 'Ahora no',
+    ],
+
+    'offline' => [
+        'title'      => 'Sin conexión',
+        'body'       => 'No he podido cargar la aplicación. Vuelve a intentarlo cuando tengas red.',
+        'queue_safe' => 'Lo que hayas grabado sigue guardado en este dispositivo y se enviará solo.',
+    ],
+
     'errors' => [
         'generic'        => 'Algo ha fallado. Inténtalo de nuevo.',
         'csrf'           => 'El formulario ha caducado. Inténtalo otra vez.',
