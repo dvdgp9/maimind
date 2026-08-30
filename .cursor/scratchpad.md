@@ -720,6 +720,78 @@ entonces los trabajos `transcribe` mueren al primer intento con «Falta
 OPENROUTER_API_KEY» —permanente a propósito, reintentar no hace aparecer una
 clave— y las grabaciones se quedan sin transcribir, pero no se pierden.
 
+**2026-08-30 — Verificación en producción de la fase 2. Hallazgo importante.**
+
+Desplegadas 1.4, 1.5, D10, 2.1 y 2.2 (producción llevaba tres tareas de
+retraso), y probada la cadena entera contra la API real subiendo habla en
+español generada con TTS.
+
+**Funciona**: la grabación de 8,5 s se transcribió verbatim en 1,5 s por 28
+micros, con los tramos anclados exactos. El trabajo `transcribe` que llevaba
+aparcado desde antes del despliegue se ejecutó solo, que era el mecanismo de la
+1.3 esperando a que llegara su manejador.
+
+⚠️ **Y entonces apareció lo importante. `whisper-large-v3-turbo` se come frases
+enteras, en silencio.**
+
+Sobre una grabación de 40 s desapareció «Sobre las cinco salí a andar media hora
+por el parque y me vino muy bien», dejando solo su última palabra pegada a la
+frase siguiente. Comprobado a fondo:
+
+- **No era el audio**: recortado ese trozo y enviado solo, se transcribe perfecto.
+- **No era el código**: el texto llega así de la API.
+- **Es determinista**: repetido, falta exactamente igual. Reintentar no sirve.
+- **`whisper-large-v3` no turbo falla idéntico**: el mismo hueco, la misma frase.
+- **El texto resultante se lee con total fluidez.** Nada delata la pérdida.
+
+Para este producto es grave: desapareció un acontecimiento real —salió a andar y
+le vino bien—, que es exactamente el tipo de dato del que va la aplicación, y
+desapareció sin dejar rastro en el texto.
+
+**Pero sí deja rastro, y ya lo estábamos guardando.** Los tramos eran
+`[0,0–25,4]` y `[30,0–40,3]`: un hueco de 4,6 s en la línea de tiempo. Guardar
+los segmentos con sus tiempos, que se justificó como «útil para reproducir el
+audio desde un punto», resulta ser **el único detector de pérdida de contenido
+del sistema**.
+
+Comparación completa (misma grabación de 40 s, en producción):
+
+| Modelo | Palabras | Tramos | Huecos | Coste | Latencia | Confianza |
+|---|---|---|---|---|---|---|
+| whisper-large-v3-turbo | 126 | 2 | **25,4–30,0** | 134 µ$ | 1490 ms | 0,949 |
+| whisper-large-v3 | 126 | 2 | **25,4–30,0** | 303 µ$ | 3084 ms | 0,966 |
+| **whisper-1** | 146 | **9** | ninguno | 4100 µ$ | 3360 ms | 0,838 |
+| deepgram/nova-3 | 147 | 2 | ninguno | 2895 µ$ | **957 ms** | — |
+| google/chirp-3 · voxtral-mini | — | — | — | — | — | 400: sin `verbose_json` |
+
+**Los dos modelos que pierden contenido reportan MÁS confianza que el que no lo
+pierde.** Es la mejor ilustración posible del problema 4: la confianza del
+modelo no mide si acertó.
+
+**Modelo cambiado a `openai/whisper-1`** en el repositorio y en el `.env` de
+producción (copia en `.env.bak-20260830`), verificado después por la cadena
+real: 146 palabras, 9 tramos, 0 mal anclados, sin huecos. Cuesta 30 veces más
+que turbo —unos 22 $/año por usuario a 10 min diarios— y para un producto que se
+sostiene sobre citas literales eso no es una elección difícil.
+
+Datos de prueba borrados de producción tras verificar (5 entradas, 5
+transcripciones, 10 trabajos, 5 ficheros de audio y la cuenta). Coste total de
+toda la investigación: **unos 0,02 $**.
+
+**Lo que esta comparación NO prueba**: el audio era voz sintética, sin muletillas
+ni frases a medias. Que un modelo respete las vacilaciones de una persona real
+—que es lo que exige el anclaje de evidencia— hay que comprobarlo con habla de
+verdad.
+
+**Pendiente propuesto**: detectar huecos de cobertura comparando los tramos con
+la duración del audio, y marcar la entrada. No recupera lo perdido, pero deja de
+ser invisible. Ningún modelo está a salvo de esto.
+
+⚠️ **Seguridad, corregido lo que dije antes.** `codex` **sigue teniendo**
+`(root) NOPASSWD: ALL`. Una prueba con `sudo -u dvdgp` falló pidiendo
+contraseña y me llevó a decir que el problema estaba resuelto; no lo está:
+hacerse pasar por otro usuario pide contraseña, pasar a root no.
+
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue
 - D10 política de datos de OpenRouter → **antes de enviar la primera transcripción real**
@@ -799,6 +871,18 @@ y añadir la entrada de cron. Instrucciones en `docs/despliegue.md`.
 - Se pueden combinar `time_zone`, `sql_mode` y `collation_connection` en un solo `SET`, que
   es lo que permite meterlos todos en `MYSQL_ATTR_INIT_COMMAND` (solo admite una sentencia)
   y que se reapliquen al reconectar.
+- **Una transcripción fluida no es una transcripción completa.** Dos modelos de
+  Whisper se comieron una frase entera de una grabación de 40 s y el texto
+  resultante no tenía ninguna costura: se leía perfecto. Sin comparar contra lo
+  que se había dicho de verdad, no había forma de notarlo. Probar un
+  transcriptor con audio del que no se conoce el contenido no prueba nada.
+- **La confianza del modelo no mide si acertó.** Los dos modelos que perdían
+  contenido reportaron 0,95 y 0,97; el que transcribió completo, 0,84.
+- **Producción puede llevar tres tareas de retraso sin que nada chirríe.**
+  Reiniciar el worker recarga el código que hay en disco, no el que hay en
+  GitHub. La pista estaba en la respuesta de la API —le faltaba un campo que se
+  añadió en 1.4— y se me pasó. Antes de investigar un comportamiento raro en
+  producción, comprobar qué commit está desplegado.
 - **Un comentario que dice «acuérdate» no es un mecanismo.** El `VERSION` del
   service worker era un número a mano; olvidarlo dejaba a los móviles ya
   instalados con el CSS viejo indefinidamente, sin señal ninguna en el servidor.
