@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Despliegue en producción. Se ejecuta EN el servidor:
+#
+#   sudo bash /home/dvdgp/web/maimind.iaiapro.com/public_html/bin/deploy
+#
+# Idempotente: se puede lanzar tantas veces como haga falta.
+
+set -euo pipefail
+
+APP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OWNER=dvdgp
+WEBGROUP=www-data
+
+cd "$APP"
+
+echo "==> Código"
+git config --global --add safe.directory "$APP" 2>/dev/null || true
+git pull --ff-only origin main
+echo "    $(git rev-parse --short HEAD) $(git log -1 --format=%s)"
+
+echo "==> Dependencias"
+COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --no-interaction --optimize-autoloader --quiet
+
+echo "==> Migraciones"
+php bin/migrate
+
+echo "==> Catálogo"
+php bin/seed
+
+echo "==> Permisos"
+# El código lo lee el servidor web; storage además lo escribe.
+chown -R "$OWNER:$OWNER" "$APP"
+chgrp -R "$WEBGROUP" "$APP/storage"
+chmod -R 2770 "$APP/storage"
+chmod 600 "$APP/.env"
+
+echo "==> Comprobación"
+php bin/check
+
+echo "==> Listo"
