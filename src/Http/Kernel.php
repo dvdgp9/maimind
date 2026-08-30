@@ -13,6 +13,7 @@ use MaiMind\Domain\Auth\PasswordHasher;
 use MaiMind\Domain\Auth\SessionManager;
 use MaiMind\Domain\User;
 use MaiMind\Repository\EntryRepository;
+use MaiMind\Repository\TranscriptRepository;
 use MaiMind\Repository\UserRepository;
 use MaiMind\Support\AssetVersion;
 use MaiMind\Support\Config;
@@ -315,6 +316,75 @@ final class Kernel
             ]));
         });
 
+        // --------------------------------------------------- una grabación
+
+        $r->get('/entrada/{uid}', function (Request $request, ?User $user): Response {
+            $uid     = (string) $request->attribute('uid');
+            $entries = $this->entriesFor($user);
+            $entrada = $entries->detail($uid);
+
+            if ($entrada === null) {
+                // 404 y no 403: un 403 confirmaría que ese identificador existe.
+                return Response::html(View::render('error', [
+                    'title' => t('errors.not_found'), 'message' => '', 'user' => $user,
+                ]), 404);
+            }
+
+            return Response::html(View::render('entrada', [
+                'user'          => $user,
+                'csrf'          => $this->csrfTokenFor($request),
+                'entrada'       => $entrada,
+                'transcripcion' => $this->transcriptsFor($user)->currentFor((int) $entrada['id']),
+                'guardado'      => isset($request->query['guardado']),
+            ]));
+        });
+
+        $r->post('/entrada/{uid}/transcripcion', function (Request $request, ?User $user): Response {
+            $uid     = (string) $request->attribute('uid');
+            $entries = $this->entriesFor($user);
+            $entrada = $entries->detail($uid);
+
+            if ($entrada === null) {
+                return Response::html(View::render('error', [
+                    'title' => t('errors.not_found'), 'message' => '', 'user' => $user,
+                ]), 404);
+            }
+
+            $texto = trim((string) $request->input('text', ''));
+
+            $transcripts = $this->transcriptsFor($user);
+            $actual      = $transcripts->currentFor((int) $entrada['id']);
+
+            if ($texto === '' || $actual === null || $texto === (string) $actual['text']) {
+                // Nada que guardar. Guardar una copia idéntica llenaría el
+                // historial de versiones que no dicen nada.
+                return Response::redirect('/entrada/' . $uid);
+            }
+
+            $transcripts->storeManualEdit(
+                (int) $entrada['id'],
+                $texto,
+                $entrada['audio_duration_ms'] === null ? null : (int) $entrada['audio_duration_ms'],
+            );
+
+            // El texto ha cambiado, así que lo que se extraiga de él también.
+            // La clave de deduplicación se encarga de que no se encole dos
+            // veces si ya había una extracción esperando.
+            (new JobQueue($this->pdo))->push(
+                type: 'extract',
+                payload: ['entry' => $uid],
+                userId: $user->id,
+                dedupeKey: 'extract:' . $uid,
+                priority: 4,
+            );
+
+            $this->logger->info('Transcripción corregida a mano', [
+                'user_id' => $user->id, 'entry' => $uid,
+            ]);
+
+            return Response::redirect('/entrada/' . $uid . '?guardado=1');
+        });
+
         $r->get('/api/entries', function (Request $request, ?User $user): Response {
             return Response::json(['entries' => $this->entriesFor($user)->recent(50)]);
         });
@@ -548,6 +618,13 @@ final class Kernel
         assert($user !== null, 'Una ruta privada siempre llega con usuario resuelto');
 
         return new EntryRepository($this->pdo, $user->id);
+    }
+
+    private function transcriptsFor(?User $user): TranscriptRepository
+    {
+        assert($user !== null, 'Una ruta privada siempre llega con usuario resuelto');
+
+        return new TranscriptRepository($this->pdo, $user->id);
     }
 
     private function startSessionAndRedirect(User $user, Request $request): Response

@@ -78,7 +78,7 @@ final class TranscriptionResult
             $aguja = trim($segmento->text);
 
             if ($aguja === '') {
-                $anclados[] = $segmento;
+                $anclados[] = $segmento->unanchored();
 
                 continue;
             }
@@ -86,7 +86,10 @@ final class TranscriptionResult
             $posicion = mb_strpos($texto, $aguja, $desde);
 
             if ($posicion === false) {
-                $anclados[] = $segmento;
+                // Sin anclaje, y **borrando el que trajera**: al re-anclar una
+                // corrección, los tramos vienen ya anclados al texto anterior,
+                // y esos offsets apuntan a palabras que en el nuevo no están.
+                $anclados[] = $segmento->unanchored();
 
                 continue;
             }

@@ -37,6 +37,25 @@ return [
         'yesterday'     => 'ayer',
     ],
 
+    'entry' => [
+        'back'            => 'Volver',
+        'transcript'      => 'Lo que dijiste',
+        'edit_hint'       => 'Si el transcriptor se ha equivocado, corrígelo aquí.',
+        'save'            => 'Guardar corrección',
+        'saved'           => 'Corrección guardada',
+        'edited_by_you'   => 'Corregido por ti',
+        'machine_said'    => 'Transcrito por :model',
+        'words'           => ':count palabras',
+        'not_yet'         => 'Todavía no está transcrita',
+        'in_progress'     => 'Transcribiendo…',
+        'failed'          => 'No se ha podido transcribir',
+        'audio_gone'      => 'El audio ya no está: se borra a los :days días',
+        // Se dice sin dramatizar y sin culpar a nadie: es un hecho sobre el dato.
+        'gap_notice'      => 'Faltan :seconds s de audio sin transcribir',
+        'gap_explain'     => 'El transcriptor se saltó ese trozo. Puedes escribirlo tú si lo recuerdas.',
+        'mood_was'        => 'Antes de grabar marcaste :value de 5',
+    ],
+
     'review' => [
         'title'          => 'Esto es lo que he entendido',
         'confirm'        => 'Sí, es así',

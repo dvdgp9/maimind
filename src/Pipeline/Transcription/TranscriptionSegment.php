@@ -68,6 +68,27 @@ final class TranscriptionSegment
         );
     }
 
+    /**
+     * El mismo tramo sin anclaje.
+     *
+     * Hace falta al re-anclar tramos que ya venían anclados a otro texto: si
+     * el tramo ya no aparece en el texto nuevo, sus offsets viejos apuntan a
+     * palabras que ahí no están. Conservarlos sería peor que no tener ninguno.
+     */
+    public function unanchored(): self
+    {
+        return new self(
+            $this->index,
+            $this->text,
+            $this->startMs,
+            $this->endMs,
+            $this->confidence,
+            null,
+            null,
+            $this->providerMetrics,
+        );
+    }
+
     /** @return array<string,mixed>  tal como se guarda en transcripts.segments */
     public function toArray(): array
     {

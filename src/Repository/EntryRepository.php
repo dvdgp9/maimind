@@ -187,6 +187,20 @@ final class EntryRepository extends UserScopedRepository
     }
 
     /**
+     * Una entrada con todo lo que la pantalla de detalle necesita.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function detail(string $uid): ?array
+    {
+        return $this->findOneWhere(
+            ['uid' => $uid],
+            'id, uid, captured_at, local_date, client_timezone, mood_hint, '
+            . 'audio_state, audio_duration_ms, pipeline_state, error_message, reviewed_at',
+        );
+    }
+
+    /**
      * Mueve el estado del pipeline.
      *
      * `error_message` se limpia al avanzar: si no, una entrada que falló y

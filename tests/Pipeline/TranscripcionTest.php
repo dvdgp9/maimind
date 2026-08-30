@@ -207,6 +207,28 @@ final class TranscripcionTest extends TestCase
         $this->assertFalse($resultado->isFullyAnchored());
     }
 
+    public function test_un_tramo_ya_anclado_a_otro_texto_pierde_sus_offsets(): void
+    {
+        // Salió al corregir una transcripción a mano: los tramos guardados
+        // vienen anclados al texto anterior, y si el tramo ya no aparece en el
+        // nuevo, esos offsets señalan palabras que ahí no están. Conservarlos
+        // sería exactamente lo que el anclaje existe para impedir.
+        $viejo = new TranscriptionSegment(1, 'Dos.', 15000, 30000, null, 5, 9);
+
+        $resultado = new TranscriptionResult(
+            text: 'Uno. Tres.',
+            provider: 'user',
+            model: 'manual',
+            segments: [new TranscriptionSegment(0, 'Uno.', 0, 15000, null, 0, 4), $viejo],
+        );
+
+        $this->assertSame(0, $resultado->segments[0]->charStart, 'El que sigue estando sigue anclado');
+        $this->assertNull($resultado->segments[1]->charStart);
+        $this->assertNull($resultado->segments[1]->charEnd);
+        // Los tiempos no se tocan: siguen describiendo el audio.
+        $this->assertSame(15000, $resultado->segments[1]->startMs);
+    }
+
     public function test_un_tramo_con_tiempos_imposibles_se_rechaza(): void
     {
         $this->expectException(InvalidArgumentException::class);

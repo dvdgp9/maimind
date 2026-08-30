@@ -41,6 +41,24 @@ return [
         'yesterday'     => 'yesterday',
     ],
 
+    'entry' => [
+        'back'            => 'Back',
+        'transcript'      => 'What you said',
+        'edit_hint'       => 'If the transcriber got it wrong, fix it here.',
+        'save'            => 'Save correction',
+        'saved'           => 'Correction saved',
+        'edited_by_you'   => 'Corrected by you',
+        'machine_said'    => 'Transcribed by :model',
+        'words'           => ':count words',
+        'not_yet'         => 'Not transcribed yet',
+        'in_progress'     => 'Transcribing…',
+        'failed'          => 'Could not be transcribed',
+        'audio_gone'      => 'The audio is gone: it is deleted after :days days',
+        'gap_notice'      => ':seconds s of audio were not transcribed',
+        'gap_explain'     => 'The transcriber skipped that stretch. You can write it in if you remember it.',
+        'mood_was'        => 'Before recording you marked :value out of 5',
+    ],
+
     'review' => [
         'title'             => 'Here is what I understood',
         'confirm'           => 'Yes, that is right',

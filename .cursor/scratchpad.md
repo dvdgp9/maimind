@@ -196,7 +196,8 @@ profesionales. Se detallarán al llegar: diseñarlas ahora sin datos reales es a
 - [x] D10 Política de datos de OpenRouter — *ajuste de cuenta aplazado a propósito*
 - [x] 2.1 Interfaz TranscriptionProvider + implementación falsa
 - [x] 2.2 Implementación OpenRouter + job transcribe + coste real
-- [ ] 2.3 Vista de la transcripción y edición manual
+- [x] 2.3 Vista de la transcripción y edición manual — **FASE 2 COMPLETA**
+- [ ] 3.1 JSON Schema del contrato + validador + fixtures
 
 ---
 
@@ -824,6 +825,47 @@ Queda por comprobar con **habla real** —con muletillas y frases a medias— qu
 modelo respeta mejor las vacilaciones. La voz sintética no sirve para eso. Se
 hará cuando haya grabaciones de verdad.
 
+**2026-08-30 — Executor, tarea 2.3 terminada. FASE 2 COMPLETA.**
+
+`/entrada/{uid}`: la fecha, el toque previo, la transcripción en un área
+editable y, si falta audio, el aviso. `POST /entrada/{uid}/transcripcion`
+guarda la corrección.
+
+**Corregir no sobrescribe: añade una versión encima.** Lo que oyó la máquina y
+lo que la persona dice que dijo son dos datos distintos, y la diferencia entre
+ambos dice dónde falla el ASR con esa voz concreta. La fila nueva lleva
+`provider = 'user'` y sin coste, así que no se confunde con una inferencia ni
+al sumar gastos ni al comparar proveedores.
+
+**Los tramos se conservan y se vuelven a anclar solos** contra el texto nuevo:
+los tiempos siguen describiendo el audio, y el tramo que ya no aparezca se
+queda sin offsets.
+
+**El aviso de hueco desaparece en cuanto una persona ha corregido el texto.**
+Ha cumplido su función; seguir enseñándolo sería insistir sobre algo ya
+atendido, que es lo que prohíbe el §3 del documento de tono. El dato se
+conserva en la fila: que la máquina se dejara ese audio no deja de ser verdad
+porque alguien haya escrito encima.
+
+**Un fallo real, encontrado por un test que casi no escribo.** Al re-anclar los
+tramos de una corrección, un tramo que ya no aparecía en el texto **conservaba
+los offsets del texto anterior**. Es exactamente lo que el anclaje existe para
+impedir: una cita señalando palabras que esa persona no dijo. Solo salía al
+re-anclar tramos ya anclados —con un resultado recién llegado del proveedor los
+offsets son nulos y no se notaba—. Arreglado con `unanchored()` y con un test
+en la clase donde vive la lógica, no solo en la pantalla.
+
+**303 tests de PHP (1646 aserciones) y 11 de JavaScript, en verde.** Verificado
+además en navegador a 390 px con el hueco real de 25,4–30,0 s: el aviso sale
+antes del texto —quien lo lea tiene que saber que está incompleto **antes** de
+leerlo, no después—, la corrección se guarda y la pantalla pasa a decir
+«Corregido por ti».
+
+**Pendiente evidente para la fase 4**: no se puede escuchar el audio. Con un
+hueco señalado en 0:25–0:30 y sin forma de reproducirlo, corregir es hacer
+memoria a ciegas. Una ruta de reproducción con la sesión por delante es lo
+primero que pedirá la pantalla de revisión.
+
 Pendientes por fase:
 - D9 alta en Hestia (subdominio, BD, usuario, systemd, cron) → antes del primer despliegue
 - D10 política de datos de OpenRouter → **antes de enviar la primera transcripción real**
@@ -903,6 +945,13 @@ y añadir la entrada de cron. Instrucciones en `docs/despliegue.md`.
 - Se pueden combinar `time_zone`, `sql_mode` y `collation_connection` en un solo `SET`, que
   es lo que permite meterlos todos en `MYSQL_ATTR_INIT_COMMAND` (solo admite una sentencia)
   y que se reapliquen al reconectar.
+- **Un valor que se arrastra de un objeto viejo no está «vacío», está mal.** Al
+  re-anclar tramos guardados contra un texto corregido, los que ya no aparecían
+  conservaban los offsets del texto anterior, porque el camino de «no
+  encontrado» devolvía el tramo tal cual. Con datos recién llegados del
+  proveedor no se veía —ahí los offsets son nulos— y solo apareció al reutilizar
+  objetos ya poblados. Al no encontrar algo, hay que **borrar** lo que hubiera,
+  no dejarlo pasar.
 - **Una transcripción fluida no es una transcripción completa.** Dos modelos de
   Whisper se comieron una frase entera de una grabación de 40 s y el texto
   resultante no tenía ninguna costura: se leía perfecto. Sin comparar contra lo

@@ -367,6 +367,77 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
     color: var(--ink-soft);
 }
 
+/* -------------------------------------------------- una grabación */
+
+.notice {
+    margin: 0 0 1.25rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius-s);
+    background: var(--surface);
+    font-size: 0.875rem;
+}
+
+.field { display: block; }
+
+.field__label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+}
+
+.transcript {
+    width: 100%;
+    padding: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+    background: var(--raised);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 1rem;
+    /* Se lee mucho más que se edita: interlineado de leer, no de formulario. */
+    line-height: 1.65;
+    resize: vertical;
+}
+
+.transcript:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.transcript__meta { margin-top: 0.85rem; }
+
+/* Audio que no llegó al texto.
+   Sin color de alarma, porque la paleta no tiene ninguno y porque esto no es
+   una alarma: es un hecho sobre el dato. Se distingue por el borde lateral. */
+.gap {
+    margin: 0 0 1.25rem;
+    padding: 0.75rem 0.9rem;
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
+
+.gap__title {
+    margin: 0 0 0.3rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+.gap__body {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+}
+
+.gap__list {
+    margin: 0.5rem 0 0;
+    padding-left: 1.1rem;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+}
+
 /* La invitación a instalar. Se enseña una vez y se puede cerrar; no insiste. */
 .install__title {
     margin: 0 0 0.3rem;
@@ -389,6 +460,11 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
     margin: 0 0 0.6rem;
     font-size: 0.8125rem;
     color: var(--ink);
+}
+
+.card--link {
+    text-decoration: none;
+    color: inherit;
 }
 
 .card--row {

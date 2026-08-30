@@ -84,7 +84,7 @@ use MaiMind\Support\Format;
             <?= e(t('capture.no_entries')) ?>
         </p>
     <?php else: ?>
-        <div class="card card--row" data-latest>
+        <a class="card card--row card--link" data-latest href="/entrada/<?= e((string) $latest['uid']) ?>">
             <?= icon('clock', 18) ?>
             <span><?= e(Format::relativeDay(
                 (string) $latest['local_date'],
@@ -93,7 +93,7 @@ use MaiMind\Support\Format;
                 $user->locale,
             )) ?></span>
             <span class="muted"><?= (int) $total ?></span>
-        </div>
+        </a>
     <?php endif; ?>
 </section>
 

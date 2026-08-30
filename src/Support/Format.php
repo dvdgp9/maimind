@@ -80,6 +80,19 @@ final class Format
             . ', ' . $hora;
     }
 
+    /**
+     * Milisegundos como m:ss, para señalar un punto de una grabación.
+     *
+     * Sin horas: una grabación de más de una hora no va a existir, y si
+     * existiera el problema no sería este formato.
+     */
+    public static function clock(int $ms): string
+    {
+        $segundos = intdiv(max(0, $ms), 1000);
+
+        return sprintf('%d:%02d', intdiv($segundos, 60), $segundos % 60);
+    }
+
     public static function todayIn(string $timezone): string
     {
         return (new DateTimeImmutable('now', new DateTimeZone($timezone)))->format('Y-m-d');
