@@ -433,11 +433,15 @@ Detalle y trampas en `docs/despliegue.md`.
 - Migraciones y catálogo aplicados en producción. `bin/check` en verde.
 - `bin/deploy` deja el despliegue en un comando.
 
-**Bloqueado por el usuario:** el DNS de `iaiapro.com` lo llevan los nameservers de
-LucusHost, no este servidor. Hace falta un registro `A` de `maimind.iaiapro.com` a
-`91.98.155.109` antes de poder emitir el certificado y acceder desde fuera.
+**En línea desde el 2026-08-30.** El usuario creó el registro `A` en LucusHost
+(`maimind.iaiapro.com` → `91.98.155.109`); certificado Let's Encrypt emitido (caduca el
+2026-11-28, renovación automática de Hestia) y `SSL_FORCE` activo.
 
-Pendiente tras el DNS: `v-add-letsencrypt-domain`, y cron de purga de audio (necesita 1.2).
+Verificado desde fuera: HTTP redirige a HTTPS, registro y sesión funcionan, la cookie sale
+`Secure` y `HttpOnly`, y ninguna ruta sensible responde. El arreglo de `open_basedir`
+sobrevivió a las operaciones de Hestia (emisión de certificado y forzado de SSL).
+
+Pendiente: cron de purga de audio (necesita 1.2) y worker (1.3).
 
 ## Convenciones acordadas
 
