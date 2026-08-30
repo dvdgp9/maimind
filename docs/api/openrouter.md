@@ -90,14 +90,53 @@ Descubrir los slugs disponibles en tiempo de implementación:
 GET https://openrouter.ai/api/v1/models?output_modalities=transcription
 ```
 
-**Slugs verificados el 2026-08-30** (19 modelos de transcripción disponibles). Los que
-importan aquí: `openai/whisper-large-v3-turbo`, `openai/whisper-large-v3`, `openai/whisper-1`.
+**Slugs verificados el 2026-08-30** (19 modelos de transcripción disponibles).
+
+### ⚠️ Los modelos large-v3 pierden contenido en silencio
+
+Medido en producción el 2026-08-30 sobre la misma grabación de 40 s en español:
+
+| Modelo | Palabras | Tramos | Huecos en la línea de tiempo | Coste (40 s) | Latencia | Confianza |
+|---|---|---|---|---|---|---|
+| `openai/whisper-large-v3-turbo` | 126 | 2 | **25,4 s – 30,0 s** | 134 µ$ | 1490 ms | 0,949 |
+| `openai/whisper-large-v3` | 126 | 2 | **25,4 s – 30,0 s** | 303 µ$ | 3084 ms | 0,966 |
+| `openai/whisper-1` | 146 | **9** | ninguno | 4100 µ$ | 3360 ms | 0,838 |
+| `deepgram/nova-3` | 147 | 2 | ninguno | 2895 µ$ | **957 ms** | — |
+| `google/chirp-3` | — | — | — | — | — | 400: no admite `verbose_json` |
+| `mistralai/voxtral-mini-transcribe` | — | — | — | — | — | 400: no admite `verbose_json` |
+
+Las dos variantes de large-v3 **se comieron una frase entera** —«Sobre las cinco salí a andar
+media hora por el parque y me vino muy bien»— dejando solo su última palabra pegada a la
+frase siguiente. Comprobado:
+
+- **No era el audio**: recortado ese trozo y enviado solo, se transcribe perfectamente.
+- **Es determinista**: repetido, falta exactamente igual. Reintentar no sirve de nada.
+- **El texto resultante se lee con total fluidez.** Nada delata la pérdida.
+
+Lo único que la delata son los **tramos con sus tiempos**: el hueco de 4,6 s está ahí. Guardar
+los segmentos, que parecía un detalle para poder reproducir el audio desde un punto, resulta
+ser el único detector de pérdida de contenido del sistema.
+
+**Y fíjese en la columna de confianza**: los dos modelos que pierden contenido la reportan
+*más alta* que el que no lo pierde. Es la mejor ilustración posible del problema 4 del
+diseño: la confianza del modelo no mide si acertó.
+
+**Por eso el modelo por defecto es `openai/whisper-1`** pese a costar 30 veces más que turbo:
+transcribe completo y da 9 tramos donde los otros dan 2, que es lo que permite volver del dato
+al audio. A 10 minutos de grabación al día salen unos 22 $ al año por usuario.
+
+`deepgram/nova-3` es la alternativa si la latencia importa: el más completo de todos, tres
+veces más rápido y un 30 % más barato que whisper-1, pero devuelve 2 tramos y ninguna medida
+de confianza.
+
+⚠️ **Lo que esta comparación NO prueba.** El audio de prueba es voz sintética, que no tiene
+muletillas ni frases a medias. Que un modelo respete las vacilaciones de una persona real
+—que es lo que exige el anclaje de evidencia— hay que comprobarlo con habla de verdad.
 
 Los modelos tipo Whisper se facturan **por duración**; los más nuevos, **por token**.
 Preferencia para MaiMind, en orden:
 
-1. **`openai/whisper-large-v3-turbo`** — verbatim, 99+ idiomas, barato y rápido.
-   **Es el que está configurado por defecto.**
+1. ~~**`openai/whisper-large-v3-turbo`**~~ — **descartado**: pierde contenido (arriba).
 2. **whisper-1** — más lento, referencia conocida.
 3. Evitar los STT basados en LLM que "limpian" el habla: en este producto las muletillas,
    vacilaciones y frases a medias **son señal**, y el anclaje de evidencia depende de que
