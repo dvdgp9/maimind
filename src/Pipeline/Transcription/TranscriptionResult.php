@@ -120,6 +120,70 @@ final class TranscriptionResult
         return round(array_sum($valores) / count($valores), 3);
     }
 
+    /**
+     * Trozos del audio que no están representados en ningún tramo.
+     *
+     * Es el detector de pérdida de contenido del sistema, y existe porque un
+     * transcriptor puede saltarse un trozo de audio **sin que el texto lo
+     * delate**: se lee con total fluidez y nadie lo nota. Lo único que queda
+     * es el hueco entre el final de un tramo y el principio del siguiente.
+     *
+     * Devuelve `null` cuando **no se puede saber** —el proveedor no dio
+     * tramos—, que no es lo mismo que devolver una lista vacía. Decir «no hay
+     * pérdida» cuando no se ha podido mirar sería la clase de mentira que este
+     * sistema no puede permitirse.
+     *
+     * @param  int  $toleranceMs  por debajo de esto es una pausa al hablar, no
+     *   una pérdida. 1,5 s: las pausas entre frases rondan los 300-800 ms, y el
+     *   caso real medido fue de 4600 ms.
+     * @return list<array{start_ms:int,end_ms:int}>|null
+     */
+    public function coverageGaps(int $audioDurationMs, int $toleranceMs = 1500): ?array
+    {
+        if ($this->segments === [] || $audioDurationMs <= 0) {
+            return null;
+        }
+
+        $huecos = [];
+        $hasta  = 0;
+
+        // Ordenados por tiempo: nada garantiza que el proveedor los dé en orden.
+        $tramos = $this->segments;
+
+        usort($tramos, static fn ($a, $b): int => $a->startMs <=> $b->startMs);
+
+        foreach ($tramos as $tramo) {
+            if ($tramo->startMs - $hasta > $toleranceMs) {
+                $huecos[] = ['start_ms' => $hasta, 'end_ms' => $tramo->startMs];
+            }
+
+            $hasta = max($hasta, $tramo->endMs);
+        }
+
+        // Y el final: un tramo que acaba mucho antes que el audio también es
+        // audio sin transcribir, aunque ahí sea más probable que sea silencio.
+        if ($audioDurationMs - $hasta > $toleranceMs) {
+            $huecos[] = ['start_ms' => $hasta, 'end_ms' => $audioDurationMs];
+        }
+
+        return $huecos;
+    }
+
+    /** Milisegundos de audio sin representar, o null si no se puede saber. */
+    public function gapTotalMs(int $audioDurationMs, int $toleranceMs = 1500): ?int
+    {
+        $huecos = $this->coverageGaps($audioDurationMs, $toleranceMs);
+
+        if ($huecos === null) {
+            return null;
+        }
+
+        return array_sum(array_map(
+            static fn (array $h): int => $h['end_ms'] - $h['start_ms'],
+            $huecos,
+        ));
+    }
+
     /** ¿Hay tramos y están todos situados en el texto? */
     public function isFullyAnchored(): bool
     {
@@ -136,9 +200,14 @@ final class TranscriptionResult
         return true;
     }
 
-    /** @return array<string,mixed>  columnas de transcripts, sin ids */
-    public function toRow(): array
+    /**
+     * @param  int|null  $audioDurationMs  para calcular la cobertura
+     * @return array<string,mixed>  columnas de transcripts, sin ids
+     */
+    public function toRow(?int $audioDurationMs = null): array
     {
+        $huecos = $audioDurationMs === null ? null : $this->coverageGaps($audioDurationMs);
+
         return [
             'provider'       => $this->provider,
             'model'          => $this->model,
@@ -152,6 +221,11 @@ final class TranscriptionResult
                     array_map(static fn (TranscriptionSegment $s): array => $s->toArray(), $this->segments),
                     JSON_UNESCAPED_UNICODE,
                 ),
+            'gap_total_ms'   => $audioDurationMs === null ? null : $this->gapTotalMs($audioDurationMs),
+            // NULL = no se sabe. [] = se miró y no hay.
+            'coverage_gaps'  => $huecos === null
+                ? null
+                : json_encode($huecos, JSON_UNESCAPED_UNICODE),
             'cost_micros'    => $this->costMicros,
             'latency_ms'     => $this->latencyMs,
         ];

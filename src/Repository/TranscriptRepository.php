@@ -46,8 +46,11 @@ final class TranscriptRepository extends UserScopedRepository
      * vigente, porque cualquier lectura de en medio vería la entrada como si no
      * estuviera transcrita.
      */
-    public function storeAsCurrent(int $entryId, TranscriptionResult $resultado): int
-    {
+    public function storeAsCurrent(
+        int $entryId,
+        TranscriptionResult $resultado,
+        ?int $audioDurationMs = null,
+    ): int {
         $propia = ! $this->pdo->inTransaction();
 
         if ($propia) {
@@ -60,7 +63,7 @@ final class TranscriptRepository extends UserScopedRepository
             $id = $this->insert([
                 'entry_id'   => $entryId,
                 'is_current' => 1,
-                ...$resultado->toRow(),
+                ...$resultado->toRow($audioDurationMs),
             ]);
 
             if ($propia) {
@@ -85,6 +88,34 @@ final class TranscriptRepository extends UserScopedRepository
             columns: 'id, provider, model, language, word_count, avg_confidence, cost_micros, is_current, created_at',
             orderBy: 'created_at DESC',
         );
+    }
+
+    /**
+     * Transcripciones a las que les falta audio.
+     *
+     * `gap_total_ms > 0` significa que hay trozos de la grabación que no
+     * aparecen en el texto. NULL significa que no se pudo comprobar —el
+     * proveedor no dio tramos— y por eso no entra aquí: no es lo mismo no
+     * tener pérdida que no haber podido mirar.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function withCoverageGaps(int $limit = 50): array
+    {
+        // SQL a mano porque findWhere() solo sabe de igualdades, y aquí hace
+        // falta un `> 0`. Sigue dentro del repositorio y sigue llevando el
+        // user_id, que es lo que la regla de aislamiento exige.
+        $stmt = $this->pdo->prepare(
+            'SELECT id, entry_id, model, gap_total_ms, coverage_gaps, created_at
+               FROM transcripts
+              WHERE user_id = ? AND is_current = 1 AND gap_total_ms > 0
+              ORDER BY gap_total_ms DESC
+              LIMIT ' . max(1, $limit)
+        );
+
+        $stmt->execute([$this->userId]);
+
+        return $stmt->fetchAll();
     }
 
     /** Lo gastado en transcripción por este usuario, en micros. */

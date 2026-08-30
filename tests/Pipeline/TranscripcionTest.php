@@ -229,8 +229,8 @@ final class TranscripcionTest extends TestCase
         ))->toRow();
 
         $this->assertSame(
-            ['provider', 'model', 'language', 'text', 'word_count',
-             'avg_confidence', 'segments', 'cost_micros', 'latency_ms'],
+            ['provider', 'model', 'language', 'text', 'word_count', 'avg_confidence',
+             'segments', 'gap_total_ms', 'coverage_gaps', 'cost_micros', 'latency_ms'],
             array_keys($fila),
         );
 
@@ -242,6 +242,118 @@ final class TranscripcionTest extends TestCase
 
         $this->assertSame(0, $guardados[0]['char_start']);
         $this->assertSame(21, $guardados[0]['char_end']);
+    }
+
+
+    // --------------------------------------- cobertura del audio
+
+    public function test_detecta_el_hueco_que_dejo_whisper_en_produccion(): void
+    {
+        // Los números son los reales del 2026-08-30: whisper-large-v3-turbo
+        // devolvió estos dos tramos para 40,4 s de audio y se comió la frase
+        // que iba en medio, sin que el texto lo delatara.
+        $resultado = new TranscriptionResult(
+            text: 'Primera parte. Segunda parte.',
+            provider: 'openrouter',
+            model: 'openai/whisper-large-v3-turbo',
+            segments: [
+                new TranscriptionSegment(0, 'Primera parte.', 0, 25400),
+                new TranscriptionSegment(1, 'Segunda parte.', 30000, 40300),
+            ],
+        );
+
+        $huecos = $resultado->coverageGaps(40396);
+
+        $this->assertCount(1, $huecos);
+        $this->assertSame(['start_ms' => 25400, 'end_ms' => 30000], $huecos[0]);
+        $this->assertSame(4600, $resultado->gapTotalMs(40396));
+    }
+
+    public function test_las_pausas_al_hablar_no_son_huecos(): void
+    {
+        // Entre frases se calla uno medio segundo. Marcar eso como pérdida
+        // llenaría el sistema de avisos que no significan nada.
+        $resultado = new TranscriptionResult(
+            text: 'Una. Dos. Tres.',
+            provider: 'p', model: 'm',
+            segments: [
+                new TranscriptionSegment(0, 'Una.', 0, 3000),
+                new TranscriptionSegment(1, 'Dos.', 3600, 6000),
+                new TranscriptionSegment(2, 'Tres.', 6900, 10000),
+            ],
+        );
+
+        $this->assertSame([], $resultado->coverageGaps(10200));
+        $this->assertSame(0, $resultado->gapTotalMs(10200));
+    }
+
+    public function test_sin_tramos_la_cobertura_es_desconocida_y_no_cero(): void
+    {
+        // Decir «no hay pérdida» cuando no se ha podido mirar sería peor que
+        // no decir nada.
+        $resultado = new TranscriptionResult(text: 'Algo.', provider: 'p', model: 'm');
+
+        $this->assertNull($resultado->coverageGaps(30000));
+        $this->assertNull($resultado->gapTotalMs(30000));
+    }
+
+    public function test_tambien_cuenta_lo_que_falta_al_principio_y_al_final(): void
+    {
+        $resultado = new TranscriptionResult(
+            text: 'En medio.',
+            provider: 'p', model: 'm',
+            segments: [new TranscriptionSegment(0, 'En medio.', 5000, 8000)],
+        );
+
+        $huecos = $resultado->coverageGaps(20000);
+
+        $this->assertSame(
+            [['start_ms' => 0, 'end_ms' => 5000], ['start_ms' => 8000, 'end_ms' => 20000]],
+            $huecos,
+        );
+        $this->assertSame(17000, $resultado->gapTotalMs(20000));
+    }
+
+    public function test_los_tramos_desordenados_no_inventan_huecos(): void
+    {
+        // Nada garantiza que el proveedor los dé en orden.
+        $resultado = new TranscriptionResult(
+            text: 'Dos. Una.',
+            provider: 'p', model: 'm',
+            segments: [
+                new TranscriptionSegment(1, 'Dos.', 5000, 10000),
+                new TranscriptionSegment(0, 'Una.', 0, 5000),
+            ],
+        );
+
+        $this->assertSame([], $resultado->coverageGaps(10000));
+    }
+
+    public function test_la_cobertura_va_a_la_fila_para_poder_consultarla(): void
+    {
+        $resultado = new TranscriptionResult(
+            text: 'Primera. Segunda.',
+            provider: 'p', model: 'm',
+            segments: [
+                new TranscriptionSegment(0, 'Primera.', 0, 25400),
+                new TranscriptionSegment(1, 'Segunda.', 30000, 40300),
+            ],
+        );
+
+        $fila = $resultado->toRow(40396);
+
+        $this->assertSame(4600, $fila['gap_total_ms']);
+        $this->assertSame(
+            [['start_ms' => 25400, 'end_ms' => 30000]],
+            json_decode((string) $fila['coverage_gaps'], true),
+        );
+
+        // Sin duración no se puede comprobar, y eso se guarda como NULL: no es
+        // lo mismo que no tener huecos.
+        $sinDuracion = $resultado->toRow();
+
+        $this->assertNull($sinDuracion['gap_total_ms']);
+        $this->assertNull($sinDuracion['coverage_gaps']);
     }
 
     public function test_el_coste_va_en_micros_enteros(): void

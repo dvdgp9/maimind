@@ -10,6 +10,8 @@ use MaiMind\Domain\Jobs\Worker;
 use MaiMind\Domain\User;
 use MaiMind\Pipeline\Transcription\FakeTranscriptionProvider;
 use MaiMind\Pipeline\Transcription\TranscriptionFailed;
+use MaiMind\Pipeline\Transcription\TranscriptionResult;
+use MaiMind\Pipeline\Transcription\TranscriptionSegment;
 use MaiMind\Repository\EntryRepository;
 use MaiMind\Repository\TranscriptRepository;
 use MaiMind\Support\Config;
@@ -302,6 +304,71 @@ final class TrabajoTranscribirTest extends AppTestCase
         $this->ejecutar($a, $uid);
 
         $this->assertSame(0, $this->transcriptor->callCount());
+    }
+
+
+    // ------------------------------------------- cobertura del audio
+
+    public function test_guarda_que_falta_audio_cuando_el_modelo_se_salta_un_trozo(): void
+    {
+        // El caso real del 2026-08-30: el modelo devolvió tramos que no cubren
+        // toda la grabación, y el texto no lo delataba.
+        $a   = $this->crearUsuario('a');
+        $uid = $this->entradaConAudio($a);
+
+        $this->transcriptor->willReturn(new TranscriptionResult(
+            text: 'Primera parte. Segunda parte.',
+            provider: 'fake',
+            model: 'modelo-que-se-salta-cosas',
+            segments: [
+                new TranscriptionSegment(0, 'Primera parte.', 0, 12000),
+                new TranscriptionSegment(1, 'Segunda parte.', 22000, 30000),
+            ],
+        ));
+
+        $this->ejecutar($a, $uid);
+
+        $fila = (new TranscriptRepository($this->pdo, $a->id))
+            ->currentFor((int) $this->entrada($a, $uid)['id']);
+
+        $this->assertSame(10000, (int) $fila['gap_total_ms']);
+        $this->assertSame(
+            [['start_ms' => 12000, 'end_ms' => 22000]],
+            json_decode((string) $fila['coverage_gaps'], true),
+        );
+    }
+
+    public function test_una_transcripcion_completa_no_deja_huecos(): void
+    {
+        $a   = $this->crearUsuario('a');
+        $uid = $this->entradaConAudio($a);
+
+        $this->ejecutar($a, $uid);
+
+        $fila = (new TranscriptRepository($this->pdo, $a->id))
+            ->currentFor((int) $this->entrada($a, $uid)['id']);
+
+        $this->assertSame(0, (int) $fila['gap_total_ms']);
+        $this->assertSame([], json_decode((string) $fila['coverage_gaps'], true));
+    }
+
+    public function test_las_transcripciones_a_las_que_falta_audio_se_pueden_listar(): void
+    {
+        $a   = $this->crearUsuario('a');
+        $uid = $this->entradaConAudio($a);
+
+        $this->transcriptor->willReturn(new TranscriptionResult(
+            text: 'Solo el principio.',
+            provider: 'fake', model: 'm',
+            segments: [new TranscriptionSegment(0, 'Solo el principio.', 0, 5000)],
+        ));
+
+        $this->ejecutar($a, $uid);
+
+        $conHuecos = (new TranscriptRepository($this->pdo, $a->id))->withCoverageGaps();
+
+        $this->assertCount(1, $conHuecos);
+        $this->assertSame(25000, (int) $conHuecos[0]['gap_total_ms']);
     }
 
     // ----------------------------------------------------- por la cola

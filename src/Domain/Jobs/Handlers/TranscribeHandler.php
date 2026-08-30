@@ -111,8 +111,27 @@ final class TranscribeHandler implements JobHandler
             throw $e;
         }
 
-        $transcripts->storeAsCurrent((int) $entrada['id'], $resultado);
+        $duracion = $entrada['audio_duration_ms'] === null
+            ? null
+            : (int) $entrada['audio_duration_ms'];
+
+        $transcripts->storeAsCurrent((int) $entrada['id'], $resultado, $duracion);
         $entries->moveToState($uid, 'transcribed');
+
+        // Audio que no aparece en el texto. No es un fallo —la transcripción
+        // sirve igual— pero tiene que constar: un transcriptor puede saltarse
+        // una frase entera sin que el texto lo delate, y entonces desaparece
+        // un acontecimiento que la persona sí contó.
+        $huecos = $duracion === null ? null : $resultado->coverageGaps($duracion);
+
+        if ($huecos !== null && $huecos !== []) {
+            $this->logger->warning('La transcripción no cubre todo el audio', [
+                'entry'   => $uid,
+                'model'   => $resultado->model,
+                'gap_ms'  => $resultado->gapTotalMs($duracion),
+                'gaps'    => $huecos,
+            ]);
+        }
 
         // Nunca el texto en el registro: es exactamente lo que esta aplicación
         // existe para proteger.
