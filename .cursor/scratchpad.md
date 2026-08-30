@@ -550,6 +550,15 @@ y añadir la entrada de cron. Instrucciones en `docs/despliegue.md`.
 - Se pueden combinar `time_zone`, `sql_mode` y `collation_connection` en un solo `SET`, que
   es lo que permite meterlos todos en `MYSQL_ATTR_INIT_COMMAND` (solo admite una sentencia)
   y que se reapliquen al reconectar.
+- **Comprobar `function_exists` de una función y llamar a otra no es comprobar
+  nada.** `bin/worker` miraba `pcntl_async_signals` y luego llamaba a
+  `pcntl_signal`: en producción la primera existe y la segunda está en
+  `disable_functions`, así que el worker moría en bucle de reinicio con
+  *Call to undefined function*. En local no aparecía porque ahí ninguna está
+  deshabilitada. Se reprodujo con `php -d disable_functions=pcntl_signal`. La
+  guarda comprueba ahora las cuatro piezas que se usan —las dos funciones y las
+  constantes SIGTERM/SIGINT, que también vienen de la extensión— y `bin/check`
+  lo avisa, que es donde debería haber salido antes que en un journal.
 - **Las funciones flecha capturan por valor, siempre.** El worker paraba con
   `shouldStop: fn () => $parar` y el manejador de SIGTERM escribía en `$parar`:
   la señal llegaba, se registraba en el log, y el proceso seguía corriendo tan

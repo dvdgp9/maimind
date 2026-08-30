@@ -46,6 +46,13 @@ foreach (['pdo_mysql', 'mbstring', 'json', 'intl', 'curl'] as $ext) {
     check("extensión {$ext}", extension_loaded($ext));
 }
 
+// No es un fallo: sin esto el worker corre igual, solo que muere en seco al
+// pararlo y su trabajo en curso tarda hasta 15 minutos en recuperarse. Aviso y
+// no comprobación porque en producción `pcntl_signal` está en disable_functions.
+if (! function_exists('pcntl_signal') || ! defined('SIGTERM')) {
+    $warnings[] = 'sin pcntl_signal: el worker no podrá pararse de forma ordenada';
+}
+
 // --- Autoload y configuración -----------------------------------------
 check('autoload PSR-4', class_exists(Ulid::class));
 check('Config cargada', config('app.name') !== null, (string) config('app.env'));

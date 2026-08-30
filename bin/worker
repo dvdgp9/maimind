@@ -73,7 +73,17 @@ try {
         exit(0);
     }
 
-    if (function_exists('pcntl_async_signals')) {
+    // Se comprueban **todas** las piezas que se van a usar, no solo una: en
+    // producción `pcntl_async_signals` existe pero `pcntl_signal` está en
+    // disable_functions, y comprobar solo la primera dejaba al worker muerto en
+    // bucle de reinicio. Las constantes SIGTERM/SIGINT también vienen de la
+    // extensión, así que sin ella tampoco existen.
+    $puedeAtenderSenales = function_exists('pcntl_async_signals')
+        && function_exists('pcntl_signal')
+        && defined('SIGTERM')
+        && defined('SIGINT');
+
+    if ($puedeAtenderSenales) {
         pcntl_async_signals(true);
 
         $manejador = static function (int $senal) use ($worker, $logger): void {
@@ -84,8 +94,11 @@ try {
         pcntl_signal(SIGTERM, $manejador);
         pcntl_signal(SIGINT, $manejador);
     } else {
-        // Sin pcntl no hay parada ordenada. Mejor decirlo que descubrirlo.
-        $logger->warning('Worker sin pcntl: no habrá parada ordenada.');
+        // Sin pcntl no hay parada ordenada, pero el worker funciona igual: al
+        // recibir SIGTERM muere en seco y el trabajo que tuviera entre manos se
+        // queda 'running'. Lo recupera reclaimStale() al arrancar el siguiente.
+        // Se degrada, no se cae.
+        $logger->warning('Worker sin pcntl_signal: no habrá parada ordenada.');
     }
 
     $logger->info('Worker arrancado', [
