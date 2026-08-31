@@ -26,15 +26,25 @@ fatal: could not read Username for 'https://github.com'
 fatal: expected flush after ref listing
 ```
 
-**no es un problema de credenciales** —el repositorio es público y `curl` llega
-sin autenticarse—: es la negociación **HTTP/2** con GitHub, que falla de forma
-intermitente en esta máquina. La segunda línea es la pista real; la primera
-manda a buscar por donde no es.
+**no es un problema de credenciales.** El repositorio es público, `curl` llega
+sin autenticarse y GitHub contesta **200 OK** con el contenido correcto: se
+comprobó con `GIT_CURL_VERBOSE=1`. Lo que pasa es que el `git` de esta máquina
+(2.34.1) no sabe leer esa respuesta en **protocolo v2**, y al no entenderla
+concluye que hará falta autenticarse.
 
-`bin/deploy` ya fuerza HTTP/1.1. Para un `git` a mano:
+La pista real es la segunda línea, «expected flush after ref listing». La
+primera manda a buscar por donde no es, y cuesta un rato.
+
+`bin/deploy` ya fuerza el protocolo v1. Para un `git` a mano:
 
 ```bash
-git -c http.version=HTTP/1.1 pull --ff-only origin main
+git -c protocol.version=1 pull --ff-only origin main
+```
+
+Para dejarlo fijo en el servidor:
+
+```bash
+sudo git -C /home/dvdgp/web/maimind.iaiapro.com/public_html config protocol.version 1
 ```
 
 ## Las dos trampas de Hestia

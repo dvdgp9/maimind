@@ -17,11 +17,12 @@ cd "$APP"
 echo "==> Código"
 git config --global --add safe.directory "$APP" 2>/dev/null || true
 
-# HTTP/1.1 explícito: la negociación HTTP/2 con GitHub falla de forma
-# intermitente en este servidor y el error que da no tiene nada que ver con la
-# causa —pide un usuario, como si el repositorio fuera privado— así que se
-# pierde un rato buscando por el lado equivocado. Ver docs/despliegue.md.
-git -c http.version=HTTP/1.1 pull --ff-only origin main
+# Protocolo git v1 explícito. El git de este servidor (2.34.1) no consigue
+# leer la respuesta de GitHub en protocolo v2: GitHub contesta 200 con el
+# contenido correcto, git no sabe interpretarlo, y entonces pide un usuario
+# como si el repositorio fuera privado. El mensaje manda a buscar por el lado
+# de las credenciales, que no tienen nada que ver. Ver docs/despliegue.md.
+git -c protocol.version=1 pull --ff-only origin main
 echo "    $(git rev-parse --short HEAD) $(git log -1 --format=%s)"
 
 echo "==> Dependencias"
