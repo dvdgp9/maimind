@@ -78,26 +78,46 @@ use MaiMind\Support\Format;
 <section class="panel">
     <h2><?= e(t('capture.last_entry')) ?></h2>
 
-    <?php if ($latest !== null): ?>
-        <p class="panel__aside"><a class="link" href="/grabaciones"><?= e(t('list.see_all')) ?></a></p>
-    <?php endif; ?>
-
     <?php if ($latest === null): ?>
         <p class="empty">
             <?= icon('calendar', 22) ?>
             <?= e(t('capture.no_entries')) ?>
         </p>
     <?php else: ?>
+        <?php $zona = (string) ($latest['client_timezone'] ?: $user->timezone); ?>
+
         <a class="card card--row card--link" data-latest href="/entrada/<?= e((string) $latest['uid']) ?>">
             <?= icon('clock', 18) ?>
-            <span><?= e(Format::relativeDay(
-                (string) $latest['local_date'],
-                (string) $latest['captured_at'],
-                $user->timezone,
-                $user->locale,
-            )) ?></span>
-            <span class="muted"><?= (int) $total ?></span>
+
+            <span class="card__main">
+                <span class="card__when"><?= e(Format::relativeDay(
+                    (string) $latest['local_date'],
+                    (string) $latest['captured_at'],
+                    $zona,
+                    $user->locale,
+                )) ?></span>
+
+                <?php /* Qué ha pasado con ella. Antes aquí solo había un número
+                         suelto que era el total y no lo decía. */ ?>
+                <span class="card__state">
+                    <?php if ($latest['word_count'] !== null): ?>
+                        <?= e(t('entry.words', ['count' => (int) $latest['word_count']])) ?>
+                    <?php elseif ($latest['pipeline_state'] === 'failed'): ?>
+                        <?= e(t('entry.failed')) ?>
+                    <?php elseif ($latest['pipeline_state'] === 'transcribing'): ?>
+                        <?= e(t('entry.in_progress')) ?>
+                    <?php else: ?>
+                        <?= e(t('entry.not_yet')) ?>
+                    <?php endif; ?>
+                </span>
+            </span>
+
+            <?= icon('caret-right', 16) ?>
         </a>
+
+        <p class="panel__aside">
+            <a class="link" href="/grabaciones"><?= e(t('list.see_all_count', ['count' => $total])) ?></a>
+        </p>
     <?php endif; ?>
 </section>
 

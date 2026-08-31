@@ -42,6 +42,7 @@ return [
         'count'          => ':count en total',
         'back_to_record' => 'Grabar',
         'see_all'        => 'Ver todas',
+        'see_all_count'  => 'Ver las :count',
     ],
 
     'entry' => [

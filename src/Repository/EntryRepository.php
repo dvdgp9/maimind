@@ -243,13 +243,17 @@ final class EntryRepository extends UserScopedRepository
         ) === 1;
     }
 
-    /** @return array<string,mixed>|null */
+    /**
+     * La última grabación, con lo que hace falta para decir en qué estado está.
+     *
+     * Antes solo traía la fecha, así que la pantalla de inicio enseñaba una
+     * fila que no contaba nada: ni si se había transcrito ni si algo había
+     * fallado.
+     *
+     * @return array<string,mixed>|null
+     */
     public function latest(): ?array
     {
-        return $this->findWhere(
-            columns: 'uid, local_date, captured_at, pipeline_state, mood_hint, audio_duration_ms',
-            orderBy: 'captured_at DESC',
-            limit: 1,
-        )[0] ?? null;
+        return $this->timeline(1)[0] ?? null;
     }
 }

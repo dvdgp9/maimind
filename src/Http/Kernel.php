@@ -346,6 +346,7 @@ final class Kernel
                 'entrada'       => $entrada,
                 'transcripcion' => $this->transcriptsFor($user)->currentFor((int) $entrada['id']),
                 'guardado'      => isset($request->query['guardado']),
+                'volverA'       => $this->dondeVolver($request),
             ]));
         });
 
@@ -664,6 +665,43 @@ final class Kernel
         assert($user !== null, 'Una ruta privada siempre llega con usuario resuelto');
 
         return new EntryRepository($this->pdo, $user->id);
+    }
+
+    /**
+     * A dónde lleva el enlace de «volver».
+     *
+     * Volver es volver **de donde vengo**, no ir siempre al mismo sitio. Si
+     * entré desde la pantalla de grabar, ahí es donde quiero acabar; si entré
+     * desde el listado, al listado.
+     *
+     * Se mira la cabecera Referer y solo se aceptan rutas propias y conocidas:
+     * es un dato que manda el navegador y no se puede usar para mandar a nadie
+     * a donde diga un tercero.
+     */
+    private function dondeVolver(Request $request): string
+    {
+        $referer = (string) ($request->header('referer') ?? '');
+
+        if ($referer === '') {
+            return '/';
+        }
+
+        // El host también, no solo la ruta: un Referer de otro sitio que
+        // acabara en /grabaciones no dice nada sobre de dónde viene esta
+        // persona. Lo cazó un test.
+        //
+        // Se compara contra el host de **esta petición** y no contra APP_URL:
+        // son el mismo en producción, pero en desarrollo se entra por
+        // 127.0.0.1 mientras APP_URL dice localhost, y entonces «volver»
+        // dejaba de funcionar sin que nada lo dijera. Aquí no hay riesgo:
+        // esto solo elige entre dos rutas propias.
+        $host = parse_url($referer, PHP_URL_HOST);
+
+        if ($host !== null && $host !== explode(':', (string) $request->header('host'))[0]) {
+            return '/';
+        }
+
+        return parse_url($referer, PHP_URL_PATH) === '/grabaciones' ? '/grabaciones' : '/';
     }
 
     private function transcriptsFor(?User $user): TranscriptRepository

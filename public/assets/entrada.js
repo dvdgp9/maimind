@@ -12,6 +12,27 @@
 (() => {
     'use strict';
 
+    // --- el área de texto crece con lo que hay dentro ---------------------
+    //
+    // El alto lo estima el servidor por el número de caracteres, pero eso no
+    // sabe el ancho real de la pantalla: en un móvil estrecho, un texto que
+    // cabía en seis líneas ocupa nueve y la última quedaba cortada. Aquí ya se
+    // puede medir.
+    const texto = document.querySelector('.transcript');
+
+    if (texto) {
+        const ajustar = () => {
+            texto.style.height = 'auto';
+            texto.style.height = texto.scrollHeight + 'px';
+        };
+
+        ajustar();
+        texto.addEventListener('input', ajustar);
+        window.addEventListener('resize', ajustar);
+    }
+
+    // --- saltar al hueco --------------------------------------------------
+
     const audio = document.querySelector('[data-audio]');
 
     if (!audio) return;

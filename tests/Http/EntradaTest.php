@@ -225,6 +225,101 @@ final class EntradaTest extends AppTestCase
         $this->assertGreaterThan(0, (int) $this->actual($a, $uid)['gap_total_ms']);
     }
 
+    // ------------------------------------------------------- volver
+
+    public function test_volver_lleva_a_donde_se_vino(): void
+    {
+        // Volver es volver de donde vengo, no ir siempre al mismo sitio.
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+        $uid   = $this->entrada($a);
+
+        $desdeInicio = $this->get('/entrada/' . $uid, [SessionManager::COOKIE => $token], [
+            'host'    => 'maimind.test',
+            'referer' => 'https://maimind.test/',
+        ])->body;
+
+        $this->assertStringContainsString('href="/"', $desdeInicio);
+
+        $desdeListado = $this->get('/entrada/' . $uid, [SessionManager::COOKIE => $token], [
+            'host'    => 'maimind.test',
+            'referer' => 'https://maimind.test/grabaciones',
+        ])->body;
+
+        $this->assertStringContainsString('href="/grabaciones"', $desdeListado);
+    }
+
+    public function test_volver_no_lleva_fuera_del_sitio(): void
+    {
+        // El Referer lo manda el navegador: no puede decidir a dónde mandamos
+        // a nadie. Cualquier cosa que no sea una ruta propia conocida cae en
+        // la pantalla de grabar.
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+        $uid   = $this->entrada($a);
+
+        $ajenos = [
+            'https://sitio-ajeno.test/grabaciones',
+            'https://maimind.test/otra',
+            '',
+        ];
+
+        foreach ($ajenos as $referer) {
+            $html = $this->get('/entrada/' . $uid, [SessionManager::COOKIE => $token], [
+                'host'    => 'maimind.test',
+                'referer' => $referer,
+            ])->body;
+
+            $this->assertStringNotContainsString('sitio-ajeno', $html);
+            $this->assertStringContainsString('href="/"', $html);
+        }
+    }
+
+    // ------------------------------------------------- la pantalla de inicio
+
+    public function test_el_inicio_dice_que_ha_pasado_con_la_ultima(): void
+    {
+        // Antes enseñaba la fecha y un número suelto que era el total y no lo
+        // decía: no se sabía ni si estaba transcrita.
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+        $uid   = $this->entrada($a, estado: 'captured');
+
+        $this->assertStringContainsString(t('entry.not_yet'), $this->getComo($token, '/')->body);
+
+        $this->conTranscripcion($a, $uid, 'Una dos tres cuatro cinco.');
+
+        $html = $this->getComo($token, '/')->body;
+
+        $this->assertStringContainsString(t('entry.words', ['count' => 5]), $html);
+        $this->assertStringContainsString('/entrada/' . $uid, $html);
+    }
+
+    public function test_el_inicio_dice_lo_que_es_ese_numero(): void
+    {
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $this->entrada($a);
+        $this->entrada($a);
+
+        // El total va etiquetado y como enlace al listado, no suelto.
+        $this->assertStringContainsString(
+            t('list.see_all_count', ['count' => 2]),
+            $this->getComo($token, '/')->body,
+        );
+    }
+
+    public function test_el_inicio_avisa_si_la_ultima_fallo(): void
+    {
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+
+        $this->entrada($a, estado: 'failed');
+
+        $this->assertStringContainsString(t('entry.failed'), $this->getComo($token, '/')->body);
+    }
+
     // ---------------------------------------------------- la corrección
 
     private function corregir(User $user, string $token, string $uid, string $texto)

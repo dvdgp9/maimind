@@ -424,21 +424,54 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
 
 /* -------------------------------------------------- una grabación */
 
+/* Esta pantalla se lee, no se centra: la de captura va centrada porque es un
+   botón, y aquí hay párrafos que necesitan un borde por el que bajar. */
+.entry__head, .entry__back { text-align: left; }
+
+.entry__when {
+    margin: 0 0 0.2rem;
+    font-size: 1.375rem;
+    line-height: 1.25;
+}
+
+.entry__meta {
+    margin: 0 0 0.5rem;
+    font-size: 0.875rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Quién escribió el texto. Va arriba, pegado al título de la sección. */
+.entry__source {
+    margin: -0.4rem 0 0.9rem;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+}
+
+.entry__back { margin-top: 2rem; }
+
 .notice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     margin: 0 0 1.25rem;
     padding: 0.7rem 0.9rem;
     border-radius: var(--radius-s);
     background: var(--surface);
     font-size: 0.875rem;
+    text-align: left;
 }
 
-.field { display: block; }
-
-.field__label {
-    display: block;
+/* El reproductor nativo trae su propio aspecto y no se puede repintar entero.
+   Lo que sí se puede es quitarle el fondo claro que se le queda pegado en tema
+   oscuro y darle el ancho de la columna. */
+.audio {
+    width: 100%;
+    height: 40px;
     margin-bottom: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--ink-soft);
+    border-radius: 999px;
+    background: var(--surface);
+    color-scheme: light dark;
 }
 
 .transcript {
@@ -450,9 +483,12 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
     color: var(--ink);
     font-family: var(--font);
     font-size: 1rem;
-    /* Se lee mucho más que se edita: interlineado de leer, no de formulario. */
+    /* Se lee mucho más que se edita: interlineado de leer. */
     line-height: 1.65;
+    text-align: left;
     resize: vertical;
+    /* Sin barra propia: el alto lo pone el contenido (ver entrada.js). */
+    overflow: hidden;
 }
 
 .transcript:focus-visible {
@@ -460,7 +496,14 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
     outline-offset: 2px;
 }
 
-.transcript__meta { margin-top: 0.85rem; }
+/* La pista va debajo del texto: primero se lee lo que uno dijo, y solo si algo
+   chirría interesa que se puede tocar. */
+.transcript__hint {
+    margin: 0.5rem 0 0.9rem;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+    text-align: left;
+}
 
 /* Audio que no llegó al texto.
    Sin color de alarma, porque la paleta no tiene ninguno y porque esto no es
@@ -471,6 +514,7 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
     border-left: 3px solid var(--accent);
     background: var(--surface);
     border-radius: 0 var(--radius-s) var(--radius-s) 0;
+    text-align: left;
 }
 
 .gap__title {
@@ -487,9 +531,15 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
 
 .gap__list {
     margin: 0.5rem 0 0;
-    padding-left: 1.1rem;
+    padding: 0;
+    list-style: none;
     font-size: 0.875rem;
-    color: var(--ink-soft);
+}
+
+.gap__list button.link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
     font-variant-numeric: tabular-nums;
 }
 
@@ -520,6 +570,20 @@ body:has(.bar) { align-items: start; padding-top: 4.5rem; }
 .card--link {
     text-decoration: none;
     color: inherit;
+}
+
+.card__main {
+    flex: 1;
+    display: grid;
+    gap: 0.15rem;
+    text-align: left;
+}
+
+.card__when { font-size: 0.9375rem; }
+
+.card__state {
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
 }
 
 .card--row {

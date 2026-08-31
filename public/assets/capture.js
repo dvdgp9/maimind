@@ -52,10 +52,22 @@ import * as cola from './offline.js';
     // --- tipo de audio ----------------------------------------------------
 
     function tipoSoportado() {
+        // mp4/AAC primero, aunque webm/opus pese menos a igual calidad.
+        //
+        // El motivo salió al usar la aplicación: lo que produce MediaRecorder
+        // en webm es un fichero **sin duración en la cabecera**, así que el
+        // reproductor no sabe cuánto dura, la barra no se puede mover y saltar
+        // a un punto no hace nada. Y Safari de iPhone directamente no
+        // reproduce webm. Como escuchar la grabación es lo que permite
+        // corregir la transcripción, un formato que no se puede escuchar no
+        // sirve por pequeño que sea.
+        //
+        // Whisper acepta m4a igual de bien, así que la transcripción no pierde.
         const preferencias = [
-            'audio/webm;codecs=opus',   // más pequeño a igual calidad
+            'audio/mp4',                // AAC: se reproduce y se busca en todas partes
+            'audio/mp4;codecs=mp4a.40.2',
+            'audio/webm;codecs=opus',   // sin duración, pero mejor que nada
             'audio/ogg;codecs=opus',
-            'audio/mp4',                // Safari anterior a la 18.4
             'audio/webm',
         ];
 

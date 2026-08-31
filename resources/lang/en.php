@@ -46,6 +46,7 @@ return [
         'count'          => ':count in total',
         'back_to_record' => 'Record',
         'see_all'        => 'See all',
+        'see_all_count'  => 'See all :count',
     ],
 
     'entry' => [
