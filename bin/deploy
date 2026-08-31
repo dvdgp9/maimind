@@ -16,7 +16,12 @@ cd "$APP"
 
 echo "==> Código"
 git config --global --add safe.directory "$APP" 2>/dev/null || true
-git pull --ff-only origin main
+
+# HTTP/1.1 explícito: la negociación HTTP/2 con GitHub falla de forma
+# intermitente en este servidor y el error que da no tiene nada que ver con la
+# causa —pide un usuario, como si el repositorio fuera privado— así que se
+# pierde un rato buscando por el lado equivocado. Ver docs/despliegue.md.
+git -c http.version=HTTP/1.1 pull --ff-only origin main
 echo "    $(git rev-parse --short HEAD) $(git log -1 --format=%s)"
 
 echo "==> Dependencias"

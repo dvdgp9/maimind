@@ -17,6 +17,26 @@ ssh iaiapro
 sudo bash /home/dvdgp/web/maimind.iaiapro.com/public_html/bin/deploy
 ```
 
+## El despliegue pide un usuario de GitHub
+
+Si `bin/deploy` corta en `==> Código` con esto:
+
+```
+fatal: could not read Username for 'https://github.com'
+fatal: expected flush after ref listing
+```
+
+**no es un problema de credenciales** —el repositorio es público y `curl` llega
+sin autenticarse—: es la negociación **HTTP/2** con GitHub, que falla de forma
+intermitente en esta máquina. La segunda línea es la pista real; la primera
+manda a buscar por donde no es.
+
+`bin/deploy` ya fuerza HTTP/1.1. Para un `git` a mano:
+
+```bash
+git -c http.version=HTTP/1.1 pull --ff-only origin main
+```
+
 ## Las dos trampas de Hestia
 
 Ambas costaron un rato y volverán a aparecer si alguien **reconstruye el dominio**
