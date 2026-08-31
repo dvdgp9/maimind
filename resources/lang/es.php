@@ -54,6 +54,7 @@ return [
         'save'            => 'Guardar corrección',
         'saved'           => 'Corrección guardada',
         'edited_by_you'   => 'Corregido por ti',
+        'edited_over'     => 'Corregido por ti, sobre :model',
         'machine_said'    => 'Transcrito por :model',
         'words'           => ':count palabras',
         'not_yet'         => 'Todavía no está transcrita',

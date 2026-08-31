@@ -141,6 +141,30 @@ final class TranscriptRepository extends UserScopedRepository
     }
 
     /**
+     * Qué motor produjo la transcripción original de una entrada.
+     *
+     * Hace falta porque una corrección a mano tapaba el modelo: la pantalla
+     * decía «corregido por ti» y ya no había forma de saber quién había
+     * transcrito eso. El proveedor se guarda en cada fila justamente para
+     * poder saber siempre qué motor produjo qué dato
+     * (04-arquitectura.md §1), así que esconderlo era tirar esa garantía.
+     */
+    public function originalModelFor(int $entryId): ?string
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT model FROM transcripts
+              WHERE user_id = ? AND entry_id = ? AND provider <> ?
+              ORDER BY id ASC LIMIT 1'
+        );
+
+        $stmt->execute([$this->userId, $entryId, self::PROVIDER_MANUAL]);
+
+        $modelo = $stmt->fetchColumn();
+
+        return $modelo === false ? null : (string) $modelo;
+    }
+
+    /**
      * Transcripciones a las que les falta audio.
      *
      * `gap_total_ms > 0` significa que hay trozos de la grabación que no

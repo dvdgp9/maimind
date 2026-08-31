@@ -340,11 +340,14 @@ final class Kernel
                 ]), 404);
             }
 
+            $transcripts = $this->transcriptsFor($user);
+
             return Response::html(View::render('entrada', [
                 'user'          => $user,
                 'csrf'          => $this->csrfTokenFor($request),
                 'entrada'       => $entrada,
-                'transcripcion' => $this->transcriptsFor($user)->currentFor((int) $entrada['id']),
+                'transcripcion' => $transcripts->currentFor((int) $entrada['id']),
+                'modeloOriginal' => $transcripts->originalModelFor((int) $entrada['id']),
                 'guardado'      => isset($request->query['guardado']),
                 'volverA'       => $this->dondeVolver($request),
             ]));

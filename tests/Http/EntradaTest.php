@@ -376,8 +376,35 @@ final class EntradaTest extends AppTestCase
 
         $html = $this->getComo($token, '/entrada/' . $uid)->body;
 
+        // Dice que lo corregiste tú **y sobre qué motor**. Esconder el modelo
+        // dejaba sin forma de saber qué produjo qué, que es media razón de
+        // guardar el proveedor en cada fila (04-arquitectura.md §1). Y con dos
+        // transcriptores en comparación, es justo el dato que hace falta.
+        $this->assertStringContainsString(
+            t('entry.edited_over', ['model' => 'openai/whisper-1']),
+            $html,
+        );
+    }
+
+    public function test_si_no_hubo_maquina_no_se_inventa_un_modelo(): void
+    {
+        // Una entrada cuyo único texto lo escribió una persona no tiene motor
+        // original que enseñar.
+        $a     = $this->crearUsuario('a');
+        $token = $this->iniciarSesion($a);
+        $uid   = $this->entrada($a);
+
+        (new TranscriptRepository($this->pdo, $a->id))->storeManualEdit(
+            $this->idDe($a, $uid),
+            'Escrito a mano desde el principio.',
+        );
+
+        $html = $this->getComo($token, '/entrada/' . $uid)->body;
+
         $this->assertStringContainsString(t('entry.edited_by_you'), $html);
-        $this->assertStringNotContainsString('openai/whisper-1', $html);
+        $this->assertStringNotContainsString('sobre', mb_strtolower(
+            (string) preg_replace('/.*?entry__source[^>]*>(.*?)<\/p>.*/su', '$1', $html)
+        ));
     }
 
     public function test_una_correccion_no_cuesta_dinero(): void

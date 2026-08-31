@@ -11,6 +11,7 @@
  * @var \MaiMind\Domain\User $user
  * @var array<string,mixed> $entrada
  * @var array<string,mixed>|null $transcripcion
+ * @var string|null $modeloOriginal
  * @var bool $guardado
  * @var string $csrf
  * @var string $volverA
@@ -104,11 +105,17 @@ $lineas = $transcripcion === null
 
     <?php else: ?>
 
-        <?php /* Quién escribió esto, arriba y no perdido debajo del botón. */ ?>
+        <?php /* Quién escribió esto, arriba y no perdido debajo del botón.
+                 Y si lo corregiste tú, también qué motor hizo el original:
+                 esconderlo dejaba sin forma de saber qué modelo produjo qué. */ ?>
         <p class="entry__source">
-            <?= e($manual
-                ? t('entry.edited_by_you')
-                : t('entry.machine_said', ['model' => (string) $transcripcion['model']])) ?>
+            <?php if ($manual): ?>
+                <?= e($modeloOriginal === null
+                    ? t('entry.edited_by_you')
+                    : t('entry.edited_over', ['model' => $modeloOriginal])) ?>
+            <?php else: ?>
+                <?= e(t('entry.machine_said', ['model' => (string) $transcripcion['model']])) ?>
+            <?php endif; ?>
             · <?= e(t('entry.words', ['count' => (int) $transcripcion['word_count']])) ?>
         </p>
 

@@ -58,6 +58,7 @@ return [
         'save'            => 'Save correction',
         'saved'           => 'Correction saved',
         'edited_by_you'   => 'Corrected by you',
+        'edited_over'     => 'Corrected by you, over :model',
         'machine_said'    => 'Transcribed by :model',
         'words'           => ':count words',
         'not_yet'         => 'Not transcribed yet',
